@@ -486,6 +486,9 @@ Set to a truthy value to bring the standalone integrations screen back into the
 flow. Parsed by `is_env_truthy`: accepts `1`, `true`, `yes`, `on` as enabled.
 """
 
+PLAN_GATE_JEV_THRESHOLD = "DEEPAGENTS_CODE_PLAN_GATE_JEV_THRESHOLD"
+"""Jev probability cutoff for the plan gate (default 0.5, must be in (0, 1])."""
+
 PROVIDER_TOOL_SEARCH = "DEEPAGENTS_CODE_PROVIDER_TOOL_SEARCH"
 """Toggle native MCP tool discovery on verified endpoints (defaults to on)."""
 

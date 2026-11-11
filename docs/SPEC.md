@@ -1,6 +1,6 @@
 # dcode 기반 Coding Assistant 구현 명세
 
-상태: M1까지 구현 (2026-11-11). 진행과 명세에서 벗어난 점은 `PROGRESS.md`에 적는다. 결정의 배경은 `docs/DESIGN.md`에 있다. 두 문서가 다르면 이 문서가 맞다.
+상태: M2까지 구현 (2026-11-11). 진행과 명세에서 벗어난 점은 `PROGRESS.md`에 적는다. 결정의 배경은 `docs/DESIGN.md`에 있다. 두 문서가 다르면 이 문서가 맞다.
 
 이 문서는 구현자가 추측 없이 만들 수 있도록 쓴다. 메서드마다 시그니처, 계약, 단계, 실패 동작을 적고 본문 코드는 적지 않는다.
 
@@ -43,7 +43,7 @@ dcode는 클라이언트와 서버 두 프로세스다. 무엇이 어디서 도�
 |---|---|---|
 | 계획 게이트 미들웨어, 계획 도구, Jev 판정, 리뷰어, Memory 주입, Langfuse 구간 | 서버 | 그래프 상태와 도구 호출을 다룬다 |
 | 계획 승인 화면, 사람 질문 화면 | 클라이언트의 기존 `ask_user` 화면 재사용 | 3.6절 |
-| `TYPESAFE_API_KEY` 사전 검사 | 클라이언트 `main.py` | 서버를 띄우기 전에 친절한 안내로 끝낸다 |
+| Jev 키(`TYPESAFE_API_KEY` 또는 `OPENROUTER_API_KEY`) 사전 검사 | 클라이언트 `main.py` | 서버를 띄우기 전에 친절한 안내로 끝낸다 |
 | `/improve`, `/runs`, `/trace`, `/remember` | 클라이언트 `app.py` | 슬래시 명령 처리기가 거기 있다 |
 | 평가 실행기, Jev 보정 스크립트 | 별도 명령 (`python -m`) | 오래 걸리고 TUI와 무관하다 |
 
@@ -88,7 +88,8 @@ libs/code/tests/unit_tests/assistant/
 |---|---|---|
 | `libs/code/pyproject.toml` | 의존성 `langfuse>=4.15.1,<5` 추가 | M0 |
 | `libs/code/uv.lock` | `uv lock`으로 갱신 | M0 |
-| `DC/_env_vars.py` | 상수 `PLAN_GATE`, `PLAN_GATE_JEV_THRESHOLD`, `LANGFUSE_TRACING` 추가 | M3 |
+| `DC/_env_vars.py` | 상수 `PLAN_GATE_JEV_THRESHOLD` 추가 (`JevDecider.from_environment`가 읽는다) | M2 |
+| `DC/_env_vars.py` | 상수 `PLAN_GATE`, `LANGFUSE_TRACING` 추가 | M3 |
 | `DC/_paths.py` | `ProjectPaths`에 `plans_dir`, `memory_dir`, `improvements_dir` 추가 | M1 |
 | `DC/_server_config.py` | `ServerConfig.plan_gate` 필드와 직렬화 | M3 |
 | `DC/client/launch/server_manager.py` | `ServerConfig.from_cli_args` 호출에 `plan_gate` 전달 | M3 |
@@ -127,7 +128,7 @@ PROTECTED_DIRS: tuple[str, ...] = (
 Phase = Literal["idle", "planning", "awaiting_approval", "executing"]
 
 
-# M2에서 더한다. Decider와 PlanReviewer가 M2에서 생기기 때문이다.
+# Decider와 PlanReviewer는 TYPE_CHECKING 아래에서만 import한다. 두 모듈이 options를 import한다.
 
 
 @dataclass(frozen=True, slots=True)
@@ -376,21 +377,31 @@ class JevDecider:
         # 5) 응답의 answers[q.name]["noul"]을 float로 읽는다
         #    답이 없으면 refused, 숫자가 아니거나 NaN이거나 0~1 밖이면 invalid
         # 6) 유효한 확률은 threshold와 비교해 passed를 정한다
-        # 7) 호출마다 tracing.record_judgment로 기록한다 (6장)
+        #    noul이 bool이나 문자열이면 invalid. 본문이 JSON이 아니거나 answers가 사전이 아니면
+        #    그 묶음 전체가 transport_error. 실패는 그 묶음의 질문에만 번진다
+        # 7) 호출마다 tracing.record_judgment로 기록한다 (6장). M6에서 더한다
 
     @classmethod
     def from_environment(cls, environ: Mapping[str, str]) -> JevDecider:
-        """환경에서 TYPESAFE_API_KEY와 임계값을 읽어 만든다.
+        """환경에서 키와 임계값을 읽어 만든다.
 
-        Raises: DeciderError: 키가 없을 때. 메시지는 키 이름만 말한다.
+        TYPESAFE_API_KEY가 있으면 URL, MODEL을 쓴다. 없고 OPENROUTER_API_KEY가 있으면
+        OPENROUTER_URL ("https://openrouter.ai/api/alpha/decisions"),
+        OPENROUTER_MODEL ("typesafe/jev-1.13")을 쓴다. 본문과 응답 형식은 같다.
+        2026-11-11 사용자 결정: Jev 키는 OPENROUTER_API_KEY로 넣는다.
+
+        Raises: DeciderError: 키가 없거나, PLAN_GATE_JEV_THRESHOLD가 (0, 1] 밖이거나 수가 아닐 때.
+                메시지는 변수 이름만 말한다. 임계값 변수가 없으면 0.5.
         """
 
 
 class FakeDecider:
     """대본으로 답하는 판정기. 테스트와 가짜 모델 실행에 쓴다."""
 
-    def __init__(self, script: Mapping[str, float] | None = None, *, default: float = 1.0) -> None:
-        """script는 질문 이름 접두사 -> 확률. "J6"는 "J6:..." 전부에 맞는다."""
+    def __init__(self, script: Mapping[str, float | None] | None = None, *, default: float = 1.0,
+                 threshold: float = JEV_THRESHOLD_DEFAULT) -> None:
+        """script는 질문 이름 접두사 -> 확률. "J6"는 "J6:..." 전부에 맞는다.
+        값이 None이면 그 질문은 transport_error다 (G16)."""
 
     calls: list[tuple[str, tuple[str, ...]]]   # (state, 질문 이름들) 기록
 ```
@@ -405,10 +416,10 @@ def question_j2(plan: Plan) -> tuple[str, Noul]: ...   # 작업 범위가 요구
 def question_j3(plan: Plan) -> tuple[str, Noul]: ...   # 작업 순서와 테스트 방법이 수정 대상에 대응하는가
 def question_j4(plan: Plan, tool_name: str, summary: str) -> tuple[str, Noul]: ...   # 이 호출이 승인된 계획 범위 안인가
 def question_j5(request: str, exploration: str) -> tuple[str, Noul]: ...   # 이 요청이 코드 변경을 필요로 하는가
-def questions_j6(request: str, records: Sequence[MemoryRecord]) -> tuple[str, list[Noul]]: ...   # 기억마다 하나
+def questions_j6(request: str, records: Sequence[MemoryRecord]) -> tuple[str, list[Noul]]: ...   # 기억마다 하나. MemoryRecord가 생기는 M5에서 더한다
 ```
 
-각 함수는 `(state 문자열, 질문)`을 돌려준다. `state`는 판정에 필요한 본문만 담고 4,000자에서 자른다. J4의 `summary`는 도구 이름과 인자 요약이고 경로와 명령만 담는다. 파일 내용은 넣지 않는다.
+각 함수는 `(state 문자열, 질문)`을 돌려준다. `state`는 판정에 필요한 본문만 담고 4,000자에서 자른다. 넘치면 각 부분(호출 요약, 요청, 절)을 같은 몫으로 잘라 긴 절 하나가 나머지를 밀어내지 않게 한다. 판정 대상(J4의 호출 요약, J5의 요청)을 앞에 둔다. J4의 `summary`는 도구 이름과 인자 요약이고 경로와 명령만 담는다. 파일 내용은 넣지 않는다.
 
 검사: `httpx.MockTransport`로 본문 형태와 인증 헤더 확인, 확률 0.49와 0.5의 경계, `noul`이 문자열인 응답, 500 응답, 시간 초과, 질문 40개의 두 묶음 분할, 오류 메시지에 키가 없는지.
 
@@ -521,7 +532,8 @@ class PlanReviewer:
         # 2) model.with_structured_output(스키마)로 한 번 부른다
         #    스키마: {"comments": [str], "questions": [str]}
         # 3) 실패하면 ReviewResult(comments=(), questions=(), error=<예외 종류 이름>)
-        # 4) tracing.span("cg.plan.review", ...)로 기록한다
+        # 4) tracing.span("cg.plan.review", ...)로 기록한다. M6에서 더한다
+        # 구조화 출력이 None이거나 스키마에 맞지 않으면 error로 돌려준다. 빈 의견으로 세지 않는다
 ```
 
 리뷰 호출이 실패하면 계획은 "리뷰 못 함" 상태로 사람에게 넘어간다. 승인 화면에 그 사실을 보여준다. 리뷰 실패를 리뷰 통과로 세지 않는다.
@@ -966,7 +978,7 @@ def _require_typesafe_key(args: argparse.Namespace, environ: Mapping[str, str]) 
     """Jev 키가 없으면 안내를 출력하고 종료 코드 1로 끝낸다."""
     # 1) args.command가 None이 아니면 반환 (threads, skills, mcp 같은 하위 명령은 검사하지 않는다)
     # 2) 계획 게이트가 꺼져 있으면 반환 (PLAN_GATE 환경변수가 "0" 또는 "false")
-    # 3) environ에 TYPESAFE_API_KEY가 있고 비어 있지 않으면 반환
+    # 3) environ에 TYPESAFE_API_KEY나 OPENROUTER_API_KEY가 있고 비어 있지 않으면 반환
     # 4) stderr에 안내를 쓰고 sys.exit(1)
 ```
 
@@ -1823,13 +1835,13 @@ G1과 G5는 README의 T4와 T3에 대응한다.
 
 ### M5. Memory
 
-`memory.py`, `propose_rule`, `agent.py`의 메모리 블록 수정, `/remember` 교체, remember 스킬 삭제.
+`memory.py`, `propose_rule`, `agent.py`의 메모리 블록 수정, `/remember` 교체, remember 스킬 삭제, `decider.py`의 `questions_j6` (M2에서 미룸).
 
 검사: `test_memory.py` 통과. 그래프 테스트 둘. 작업 기록 두 건 중 판정기가 고른 한 건만 시스템 프롬프트에 들어가는지. 세션 중에 저장한 규칙이 다음 모델 호출에 들어가는지.
 
 ### M6. 추적
 
-`tracing.py`, `runs.py`, `make_graph` 수정, `build_stream_config` 수정, LangSmith 기본 끄기.
+`tracing.py`, `runs.py`, `make_graph` 수정, `build_stream_config` 수정, LangSmith 기본 끄기. M2에서 미룬 `JevDecider.judge`의 `record_judgment`와 `PlanReviewer.areview`의 `cg.plan.review` 구간.
 
 먼저 확인할 [미확인]: 구간이 같은 trace에 들어가는지, `mask`의 적용 범위, 서버 환경에 키가 닿는지.
 
@@ -1860,7 +1872,7 @@ G1과 G5는 README의 T4와 T3에 대응한다.
 | # | 시나리오 | 방법 | 평가 항목 |
 |---|---|---|---|
 | T0 | 코드 품질 | `make lint`, `make test` | 1-1, 1-2, 1-3 |
-| T1 | 키 없이 실행 | `TYPESAFE_API_KEY` 없이 `dcode` | 게이트 전제 |
+| T1 | 키 없이 실행 | `TYPESAFE_API_KEY`, `OPENROUTER_API_KEY` 없이 `dcode` | 게이트 전제 |
 | T2 | 코드 읽기 질문 | 샘플 저장소에서 질문. 탐색 뒤 답변, 계획 파일 없음 | 게이트 범위 |
 | T3 | 버그 수정 전체 흐름 | 샘플 저장소에서 수정 요청. 탐색, 계획 파일, 리뷰 기록, 승인 화면, 코드 변경, 테스트 | 2-1 ~ 2-4 |
 | T4 | 승인 전 쓰기 차단 | `pytest tests/unit_tests/assistant/test_gate.py -k "G1 or G2 or G11"` | 2-4 |

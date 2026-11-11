@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    # decider와 reviewer가 이 모듈을 import하므로 타입 검사 때만 가져온다
+    from deepagents_code.assistant.decider import Decider
+    from deepagents_code.assistant.reviewer import PlanReviewer
 
 PLAN_GATE_MIDDLEWARE_NAME: str = "PlanGateMiddleware"
 
@@ -35,4 +43,14 @@ PROTECTED_DIRS: tuple[str, ...] = (
 
 Phase = Literal["idle", "planning", "awaiting_approval", "executing"]
 
-# PlanGateOptions는 Decider와 PlanReviewer가 생기는 M2에서 여기에 더한다.
+
+@dataclass(frozen=True, slots=True)
+class PlanGateOptions:
+    """계획 게이트를 조립하는 데 필요한 값 묶음."""
+
+    project_root: Path
+    decider: Decider
+    reviewer: PlanReviewer
+    interactive: bool
+    mcp_mutating_tool_names: frozenset[str] = frozenset()
+    threshold: float = JEV_THRESHOLD_DEFAULT
