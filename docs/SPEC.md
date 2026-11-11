@@ -1,6 +1,6 @@
 # dcode 기반 Coding Assistant 구현 명세
 
-상태: 구현 전 (2026-11-11). 결정의 배경은 `docs/DESIGN.md`에 있다. 두 문서가 다르면 이 문서가 맞다.
+상태: M1까지 구현 (2026-11-11). 진행과 명세에서 벗어난 점은 `PROGRESS.md`에 적는다. 결정의 배경은 `docs/DESIGN.md`에 있다. 두 문서가 다르면 이 문서가 맞다.
 
 이 문서는 구현자가 추측 없이 만들 수 있도록 쓴다. 메서드마다 시그니처, 계약, 단계, 실패 동작을 적고 본문 코드는 적지 않는다.
 
@@ -52,7 +52,7 @@ dcode는 클라이언트와 서버 두 프로세스다. 무엇이 어디서 도�
 ```
 DC/assistant/
   __init__.py          공개 이름만 다시 내보낸다
-  options.py           PlanGateOptions, 상수
+  options.py           상수, Phase, PlanGateOptions(M2에서 추가)
   frontmatter.py       YAML frontmatter 읽기와 쓰기
   plan.py              Plan, PlanStatus, PlanStore, 형식 검사
   decider.py           Noul, Verdict, Decider, JevDecider, FakeDecider, 질문 J1~J6
@@ -121,6 +121,13 @@ MAX_REVIEW_ROUNDS: int = 2
 JEV_THRESHOLD_DEFAULT: float = 0.5
 APPROVE_WORDS: frozenset[str] = frozenset({"승인", "approve", "approved", "yes", "y"})
 REJECT_WORDS: frozenset[str] = frozenset({"거부", "reject", "rejected", "no", "n"})
+PROTECTED_DIRS: tuple[str, ...] = (
+    ".deepagents/plans", ".deepagents/memory", ".deepagents/improvements"
+)  # 프로젝트 루트 기준. policy와 gate가 같이 쓴다
+Phase = Literal["idle", "planning", "awaiting_approval", "executing"]
+
+
+# M2에서 더한다. Decider와 PlanReviewer가 M2에서 생기기 때문이다.
 
 
 @dataclass(frozen=True, slots=True)
@@ -253,7 +260,9 @@ def parse_plan(text: str) -> Plan:
     """
     # 1) frontmatter.parse
     # 2) id, status, targets, test_command 필수. 나머지는 기본값
-    # 3) 본문을 "## 제목" 기준으로 잘라 sections를 만든다
+    # 3) 본문을 "## 제목" 기준으로 잘라 sections를 만든다. "### "는 절을 나누지 않는다
+    #    정해진 절은 REQUIRED, OPTIONAL 순서로, 알 수 없는 절은 버리지 않고 그 뒤에 둔다
+    #    첫 "##" 앞의 글은 버린다. 같은 제목이 두 번 나오면 PlanFormatError
 
 
 def validate_plan(plan: Plan) -> list[str]:
@@ -412,8 +421,9 @@ def tool_name_of(tool: BaseTool | Mapping[str, Any]) -> str | None:
     """도구 객체나 사전에서 이름을 꺼낸다. 공급자 내장 도구는 사전으로 온다."""
 
 
-def normalize_tool_path(raw: object, project_root: Path) -> Path | None:
+def normalize_tool_path(raw: object) -> Path | None:
     """도구 인자의 경로를 실제로 쓰일 절대 경로로 바꾼다. 바꿀 수 없으면 None."""
+    # 프로젝트 루트는 쓰지 않는다. 백엔드가 virtual_mode=False라 결과는 루트와 무관하다
     # 1) raw가 비지 않은 str인가
     # 2) deepagents.backends.utils.validate_path(raw)로 도구와 똑같이 정규화한다
     #    ValueError면 None
@@ -440,6 +450,9 @@ def is_read_only_shell(command: object, project_root: Path) -> bool:
 
 def mentions_protected(command: str) -> bool:
     """명령 문자열에 보호 폴더 경로가 있는가. 문자열 대조다."""
+    # is_protected처럼 상위도 잡는다. ".deepagents" 자체(뒤에 끝, 공백, 따옴표,
+    # 셸 구분자, glob 문자)와 ".deepagents/plans" 같은 보호 폴더 셋이 대상이다.
+    # ".deepagents/skills/x", ".deepagents/plans-old"는 걸리지 않는다
 
 
 def summarize_call(tool_name: str, args: Mapping[str, Any]) -> str:
@@ -1776,17 +1789,19 @@ G1과 G5는 README의 T4와 T3에 대응한다.
 4. 기준선을 잰다. 단위 테스트 전체와 lint를 한 번 돌려 결과를 `BASELINE.md`에 적는다. 실패가 있으면 목록을 적는다. 이후 "기존 기능이 깨지지 않았다"는 이 목록과의 비교다.
 5. `langfuse>=4.15.1,<5`를 의존성에 더하고 `uv lock`을 돌린다.
 
-검사: `dcode --version`이 작업 사본의 경로를 보여준다. 가짜 모델 점검(`Day09/scripts/smoke_dcode.sh`를 작업 사본용으로 옮긴 것)이 통과한다. `BASELINE.md`가 있다.
+검사: `dcode --version`이 작업 사본의 경로를 보여준다. 가짜 모델 점검(`scripts/smoke_dcode.sh`)이 통과한다. `BASELINE.md`가 있다.
+
+이후 마일스톤의 검사는 `scripts/check.sh`(`unit`, `lint`, `baseline`, `smoke`)로 돌린다. `baseline`은 단위 테스트 전체의 실패 목록을 `scripts/baseline_failures.txt`와 비교한다.
 
 ### M1. 순수 모듈
 
-`options.py`, `frontmatter.py`, `plan.py`, `policy.py`, `_paths.py` 수정.
+`options.py`(상수와 `Phase`), `frontmatter.py`, `plan.py`, `policy.py`, `_paths.py` 수정.
 
 검사: `test_frontmatter.py`, `test_plan.py`, `test_policy.py` 통과. 이 세 파일에 대한 lint 통과.
 
 ### M2. 판정기와 리뷰어
 
-`decider.py`, `reviewer.py`, `prompts.py`, `tests/.../fakes.py`.
+`decider.py`, `reviewer.py`, `prompts.py`, `tests/.../fakes.py`, `options.py`의 `PlanGateOptions`.
 
 검사: `test_decider.py`, `test_reviewer.py` 통과. 실제 Jev 한 번 호출로 응답 형태 확인(질문 하나, 비용 미미).
 
