@@ -11,6 +11,7 @@ from langchain_core.messages import ToolMessage
 from langchain_core.tools import StructuredTool
 from langgraph.types import Command, interrupt
 
+from deepagents_code.assistant import tracing
 from deepagents_code.assistant.decider import question_j1, question_j2, question_j3
 from deepagents_code.assistant.memory import (
     MemoryFormatError,
@@ -20,10 +21,12 @@ from deepagents_code.assistant.memory import (
 from deepagents_code.assistant.options import (
     APPROVE_WORDS,
     APPROVED_HUMAN_ID_KEY,
+    COUNTERS_KEY,
     EXPLORED_KEY,
     EXPLORER_SUBAGENT_NAME,
     LAST_HUMAN_ID_KEY,
     MAX_REVIEW_ROUNDS,
+    NEEDS_CHANGE_KEY,
     PHASE_KEY,
     PLAN_ID_KEY,
     REJECT_WORDS,
@@ -168,6 +171,11 @@ def build_plan_tools(
                 "submit_plan",
                 error=True,
             )
+        if state.get(NEEDS_CHANGE_KEY) is False:  # J5는 변경이 필요 없다고 봤다
+            tracing.record(
+                "cg.judge.mismatch",
+                output={"j5_needs_change": False, "tool": "submit_plan"},
+            )
         # idle에서는 끝났거나 거부된 계획을 덮어쓰지 않도록 새 id를 만든다
         plan_id = state.get(PLAN_ID_KEY) if phase != "idle" else None
         previous = await asyncio.to_thread(_load, store, plan_id)
@@ -235,6 +243,15 @@ def build_plan_tools(
             status=status, review_round=review_round, sections=sections
         )
         await asyncio.to_thread(store.save, plan)
+        tracing.record(
+            "cg.plan.submit",
+            output={
+                "plan_id": plan_id,
+                "round": review_round,
+                "format_issues": len(issues),
+                "status": status,
+            },
+        )
         return _reply(
             f"계획 {plan_id}\n{text}",
             tool_call_id,
@@ -268,6 +285,7 @@ def build_plan_tools(
         questions = plan.open_questions()
         markdown = plan.to_markdown()
         if not options.interactive:
+            tracing.record("cg.human.question", output={"asked": len(questions)})
             ask = (
                 "\n\n다음 질문에 답해 주세요.\n" + _bullets(list(questions))
                 if questions
@@ -328,6 +346,7 @@ def build_plan_tools(
             )
         questions = plan.open_questions()
         if questions:
+            tracing.record("cg.human.question", output={"answered": len(questions)})
             pairs = list(zip(questions, answers, strict=True))
             store.save(record_answers(plan, pairs).with_updates(status="draft"))
             qa = "\n".join(f"- 질문: {q}\n  답: {a}" for q, a in pairs)
@@ -339,7 +358,15 @@ def build_plan_tools(
                 **{PHASE_KEY: "planning"},
             )
         answer = answers[0].strip()
-        if answer.lower() in APPROVE_WORDS:
+        result = (
+            "approved"
+            if answer.lower() in APPROVE_WORDS
+            else "rejected"
+            if answer.lower() in REJECT_WORDS
+            else "revise"
+        )
+        tracing.record("cg.plan.approval", output={"result": result})
+        if result == "approved":
             store.save(plan.with_updates(status="approved"))
             return _reply(
                 "승인됐다. 계획대로 진행하고 끝나면 complete_plan을 불러라.",
@@ -350,7 +377,7 @@ def build_plan_tools(
                     APPROVED_HUMAN_ID_KEY: state.get(LAST_HUMAN_ID_KEY),
                 },
             )
-        if answer.lower() in REJECT_WORDS:
+        if result == "rejected":
             store.save(plan.with_updates(status="rejected"))
             return _reply(
                 "거부됐다. 코드 변경을 하지 말고 사용자에게 다음 지시를 물어라.",
@@ -436,14 +463,20 @@ def build_plan_tools(
             return _reply("승인된 계획이 없다.", tool_call_id, name, error=True)
         if abandon:
             await asyncio.to_thread(store.save, plan.with_updates(status="failed"))
+            tracing.record("cg.result", output={"status": "failed", "summary": summary})
             return _reply("계획을 포기했다.", tool_call_id, name, **{PHASE_KEY: "idle"})
-        try:
-            result = await backend.aexecute(  # ty: ignore[unresolved-attribute]
-                plan.test_command, timeout=TEST_TIMEOUT_S
+        with tracing.span("cg.test.run", input={"command": plan.test_command}) as run:
+            try:
+                result = await backend.aexecute(  # ty: ignore[unresolved-attribute]
+                    plan.test_command, timeout=TEST_TIMEOUT_S
+                )
+                exit_code, output = result.exit_code, result.output
+            except NotImplementedError:
+                exit_code, output = None, "이 세션의 백엔드는 셸 명령을 실행할 수 없다."
+            run.update(
+                output={"exit_code": exit_code, "tail": output[-OUTPUT_TAIL_CHARS:]},
+                level=None if exit_code == 0 else "ERROR",
             )
-            exit_code, output = result.exit_code, result.output
-        except NotImplementedError:
-            exit_code, output = None, "이 세션의 백엔드는 셸 명령을 실행할 수 없다."
         if exit_code == 0:
             done = plan.with_updates(status="done")
             await asyncio.to_thread(store.save, done)
@@ -455,6 +488,7 @@ def build_plan_tools(
                 text += f" 작업 기록 {record.name}을 저장했다."
             except (OSError, ValueError) as exc:
                 text += f" 작업 기록은 저장하지 못했다: {exc}"
+            tracing.record("cg.result", output={"status": "done", "summary": summary})
             return _reply(
                 text,
                 tool_call_id,
@@ -467,6 +501,7 @@ def build_plan_tools(
             tool_call_id,
             name,
             error=True,
+            **{COUNTERS_KEY: {"test_failures": 1}},
         )
 
     def _rule_question(description: str, body: str) -> dict[str, Any]:

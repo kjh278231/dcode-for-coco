@@ -486,6 +486,9 @@ Set to a truthy value to bring the standalone integrations screen back into the
 flow. Parsed by `is_env_truthy`: accepts `1`, `true`, `yes`, `on` as enabled.
 """
 
+LANGFUSE_TRACING = "DEEPAGENTS_CODE_LANGFUSE_TRACING"
+"""Set to `0` or `false` to stop sending traces to Langfuse (`--no-tracing` sets it)."""
+
 PLAN_GATE = "DEEPAGENTS_CODE_PLAN_GATE"
 """Set to `0` or `false` to run `dcode` without the plan gate and the Jev key check."""
 

@@ -1182,5 +1182,11 @@ async def make_graph(
         from deepagents_code.workspace import require_thread_workspace
 
         binding = await require_thread_workspace(thread_id, context.workspace)
-        return (await _workspace_runtime(binding)).agent
+        runtime = await _workspace_runtime(binding)
+        from deepagents_code.assistant import tracing
+
+        # 요청마다 trace id 하나: 콜백과 cg.* 구간이 같은 trace에 들어간다.
+        # 켜짐 여부는 이 워크스페이스의 환경을 따른다
+        run_config = tracing.run_config(config, runtime.model_environment or {})
+        return runtime.agent.with_config(run_config) if run_config else runtime.agent
     return (await get_server_runtime()).agent

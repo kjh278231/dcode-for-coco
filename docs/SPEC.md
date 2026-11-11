@@ -89,18 +89,18 @@ libs/code/tests/unit_tests/assistant/
 | `libs/code/pyproject.toml` | 의존성 `langfuse>=4.15.1,<5` 추가 | M0 |
 | `libs/code/uv.lock` | `uv lock`으로 갱신 | M0 |
 | `DC/_env_vars.py` | 상수 `PLAN_GATE_JEV_THRESHOLD` 추가 (`JevDecider.from_environment`가 읽는다) | M2 |
-| `DC/_env_vars.py` | 상수 `PLAN_GATE`, `LANGFUSE_TRACING` 추가 | M3 |
+| `DC/_env_vars.py` | 상수 `PLAN_GATE` 추가 (M3). [M6] `LANGFUSE_TRACING = "DEEPAGENTS_CODE_LANGFUSE_TRACING"` 추가 (M3에서 빠져 있었다) | M3, M6 |
 | `DC/_paths.py` | `ProjectPaths`에 `plans_dir`, `memory_dir`, `improvements_dir` 추가 | M1 |
 | `DC/_server_config.py` | `ServerConfig.plan_gate` 필드와 직렬화 | M3 |
 | `DC/client/launch/server_manager.py` | `ServerConfig.from_cli_args` 호출에 `plan_gate` 전달 | M3 |
-| `DC/server_graph.py` | `create_cli_agent`에 옵션 전달, `make_graph`에 Langfuse 핸들러 | M3, M6 |
+| `DC/server_graph.py` | `create_cli_agent`에 옵션 전달, `make_graph`에 `tracing.run_config(config, runtime.model_environment)` | M3, M6 |
 | `DC/agent.py` | `create_cli_agent` 인자, 미들웨어와 서브에이전트 등록, 승인 술어. [M4] `_subagent_cli_middleware`에 `SubagentWriteBlockMiddleware`, 확장 도구 이름을 `plan_gate.mcp_mutating_tool_names`에 더함 | M3, M4 |
-| `DC/main.py` | LangSmith 기본 끄기. [M5] 키 검사는 `client/launch/server_manager.py`로 옮겼다 | M3, M6 |
+| `DC/main.py` | LangSmith 기본 끄기, `--no-tracing`이 `LANGFUSE_TRACING`도 끈다 (M6). [M5] 키 검사는 `client/launch/server_manager.py`로 옮겼다 | M3, M6 |
 | `DC/client/launch/server_manager.py` | `start_server_and_get_agent`에서 Jev 키 검사 (3.10) | M5 |
 | `DC/client/non_interactive.py` | `server_session` 호출에 `plan_gate` 전달 | M3 |
 | `libs/code/scripts/check_process_cwd.py` | `run_non_interactive`의 `Path.cwd` 허용 항목 토큰 `99c1d085` → `86fa45ed` (사유 문구 그대로). 같은 문장에 `plan_gate=`를 더해 토큰이 바뀌었다 | M3 |
 | `scripts/smoke_dcode.sh`, `tests/integration_tests/test_headless_resume.py` | `DEEPAGENTS_CODE_PLAN_GATE=0` | M3 |
-| `DC/config.py` | `build_stream_config`에 Langfuse metadata | M6 |
+| `DC/config.py` | `build_stream_config`에 Langfuse metadata, `_PROJECT_DOTENV_DENIED_ENV_KEYS`에 `LANGFUSE_*` 넷 (O9) | M6 |
 | `DC/command_registry.py` | `/remember` 설명과 인자 표시, `_STATIC_SKILL_ALIASES`에서 `remember` 제거 | M5 |
 | `libs/code/COMMANDS.md` | `generate_commands_catalog.py`로 다시 만듦 | M5 |
 | `DC/_env_vars.py`, `DC/agent.py` docstring | "the `remember` skill" → "`/remember`" | M5 |
@@ -394,7 +394,7 @@ class JevDecider:
         # 6) 유효한 확률은 threshold와 비교해 passed를 정한다
         #    noul이 bool이나 문자열이면 invalid. 본문이 JSON이 아니거나 answers가 사전이 아니면
         #    그 묶음 전체가 transport_error. 실패는 그 묶음의 질문에만 번진다
-        # 7) 호출마다 tracing.record_judgment로 기록한다 (6장). M6에서 더한다
+        # 7) 질문마다 tracing.record_judgment로 기록한다 (6장) [M6]
 
     @classmethod
     def from_environment(cls, environ: Mapping[str, str]) -> JevDecider:
@@ -550,7 +550,7 @@ class PlanReviewer:
         # 2) model.with_structured_output(스키마)로 한 번 부른다
         #    스키마: {"comments": [str], "questions": [str]}
         # 3) 실패하면 ReviewResult(comments=(), questions=(), error=<예외 종류 이름>)
-        # 4) tracing.span("cg.plan.review", ...)로 기록한다. M6에서 더한다
+        # 4) tracing.span("cg.plan.review", ...)로 기록한다 [M6]. output: 의견 수, 질문 수, error. error면 level=ERROR
         # 구조화 출력이 None이거나 스키마에 맞지 않으면 error로 돌려준다. 빈 의견으로 세지 않는다
 ```
 
@@ -722,7 +722,7 @@ class PlanGateState(AgentState):
 
 [확인] `PrivateStateAttr`가 붙은 필드는 서브에이전트로 넘어가지 않고 서브에이전트에서 돌아오지도 않는다 (`SDK/middleware/subagents.py:785`, `:853`). 서브에이전트가 단계를 `executing`으로 바꿔 돌려주는 길이 막힌다. 선언 본보기는 `DC/local_context.py:718`이다.
 
-[M3] `_cg_counters`와 카운터 갱신, `aafter_agent`는 M6에서 `tracing.py`와 함께 넣는다. M3 게이트에는 없다.
+[M3] `_cg_counters`와 카운터 갱신, `aafter_agent`는 M6에서 `tracing.py`와 함께 넣었다. [M6] 연속 실패를 세려고 비공개 키 `_cg_last_error`(직전 실패 호출의 `summarize_call` 요약, 성공하면 None)를 더했다. 요청 시작 때 `_cg_counters`는 `{"__reset__": 1, "llm_base": <request_count>}`로 되돌린다. `complete_plan`의 테스트 실패는 도구가 `_cg_counters: {"test_failures": 1}`를 직접 싣고, 게이트가 자기 증가분과 더한다. [M6 리뷰] `_cg_last_error`에도 리듀서(나중 값이 이김)를 달았다. 없으면 한 AI 메시지의 도구 호출이 둘 이상일 때 `InvalidUpdateError`("Can receive only one value per step")가 났다. 병렬 호출 안에서 어느 값이 남는지는 순서에 달렸다. 테스트 `test_parallel_tool_calls_in_one_step`(병렬 거부 둘, 병렬 허용 둘). `ask_user`의 결과는 감싸지 않고 세지 않는다 (14장).
 
 `_cg_counters`의 키는 `tool_calls`, `tool_errors`, `gate_denies`, `jev_denies`, `test_failures`, `repeat_failures`다. 요청이 시작될 때 0으로 되돌린다.
 
@@ -769,7 +769,7 @@ class PlanGateMiddleware(AgentMiddleware):
 5) phase가 "awaiting_approval"이면 비대화 답을 해석한다 (아래)
 6) phase가 "idle"이면 _cg_explored=False, _cg_needs_change=None
    (phase가 planning이나 executing이면 진행 중인 계획을 이어간다. explored를 지우지 않는다)
-7) tracing.begin_request(...) (6장)
+7) [M6] begin_request는 두지 않았다. trace id는 make_graph가 정한다 (6.2). 할 일이 없다
 8) 모은 값을 dict로 반환
 ```
 
@@ -844,7 +844,8 @@ ToolMessage(content=<사유 문장>, name=request.tool_call["name"],
 1) counters와 LLM 호출 수를 모은다
    LLM 호출 수는 상태의 _session_cost_breakdown["request_count"]에서 읽는다
    이 값은 대화 전체 누적이다. 요청 시작 때 값을 _cg_counters["llm_base"]에 적어 두고 차이를 쓴다
-2) tracing.end_request(counters, phase, plan_id)로 지표를 trace에 점수로 붙인다
+2) tracing.end_request(counters=, llm_calls=, review_rounds=, phase=, plan_id=)로 지표를 trace에 점수로 붙인다
+   [M6] 승인 화면에서 멈춘 실행에는 after_agent가 돌지 않는다. 요청이 끝나는 실행에서 요청 전체의 값으로 붙는다
 3) None 반환
 ```
 
@@ -1175,7 +1176,7 @@ class MemoryInjectionMiddleware(AgentMiddleware):
         #    [M5 리뷰] phase가 idle이 아니고 계획이 있으면 요청 본문은 "계획의 요구사항 + 빈 줄 + 새 메시지"다.
         #    "승인", "계속해" 같은 짧은 메시지만으로 고르면 관련 기록이 빠진다
         #    질문 이름은 "J6:<기억 이름>". 통과한 것의 이름만 모은다
-        # 5) tracing.span("cg.memory.inject", output={"selected": [...], "candidates": n})  [M6에서 더한다]
+        # 5) tracing.record("cg.memory.inject", output={"candidates": n, "selected": [...], "body_dropped": [...], "truncated": bool})  [M6]
         # 6) {"_cg_selected_memories": [...], "_cg_memory_human_id": 새 id} 반환
 
     async def awrap_model_call(self, request, handler):
@@ -1201,7 +1202,7 @@ J6는 요청당 한 번만 돈다. 재개된 실행에서 다시 돌지 않게 �
 
 [확정] 프로젝트 규칙은 판정 없이 항상 주입한다. 작업 기록만 J6가 고른다. Jev 호출은 작업 기록 32개당 한 번이다.
 
-주입 크기 상한을 둔다. 규칙과 선택된 기록의 본문 합이 20,000자를 넘으면 뒤의 것부터 본문을 빼고 이름과 설명만 남긴다. 뺀 사실을 구간에 기록한다 [구간은 M6]. [M5 리뷰] 상한은 틀 안 전체(색인, 생략 줄 포함)에 건다. 색인은 5,000자를 넘으면 앞(오래된) 줄을 빼고 최근 줄을 남긴다. 본문을 뺀 뒤에도 넘으면 20,000자에서 자르고 잘렸다고 적는다. 주입하는 글의 `<project_memory`, `</project_memory`는 `&lt;`로 바꿔 틀을 닫거나 새로 열지 못하게 한다. [M5] 규칙도, 선택된 기록도, 색인 항목도 없으면 주입하지 않는다(MEMORY.md가 없어도 선택된 기록은 넣는다). 동기 `before_agent`, `wrap_model_call`도 같은 동작으로 둔다.
+주입 크기 상한을 둔다. 규칙과 선택된 기록의 본문 합이 20,000자를 넘으면 뒤의 것부터 본문을 빼고 이름과 설명만 남긴다. 뺀 사실을 구간에 기록한다 [M6: `cg.memory.inject`의 `body_dropped`(본문을 뺀 기억 이름), 최종 자르기면 `truncated`. 요청 시작 때 한 번 계산한다]. [M5 리뷰] 상한은 틀 안 전체(색인, 생략 줄 포함)에 건다. 색인은 5,000자를 넘으면 앞(오래된) 줄을 빼고 최근 줄을 남긴다. 본문을 뺀 뒤에도 넘으면 20,000자에서 자르고 잘렸다고 적는다. 주입하는 글의 `<project_memory`, `</project_memory`는 `&lt;`로 바꿔 틀을 닫거나 새로 열지 못하게 한다. [M5] 규칙도, 선택된 기록도, 색인 항목도 없으면 주입하지 않는다(MEMORY.md가 없어도 선택된 기록은 넣는다). 동기 `before_agent`, `wrap_model_call`도 같은 동작으로 둔다.
 
 **등록.** `DC/agent.py`의 `if enable_memory:` 블록 (`:3254` ~ `:3283`) 끝에 넣는다. `plan_gate`가 있을 때만이다.
 
@@ -1270,46 +1271,57 @@ improvements_dir: Path   # config_dir / "improvements"
 ```python
 def is_enabled(environ: Mapping[str, str]) -> bool:
     """LANGFUSE_PUBLIC_KEY와 LANGFUSE_SECRET_KEY가 둘 다 있고 LANGFUSE_TRACING이 꺼져 있지 않은가."""
+    # LANGFUSE_TRACING = "DEEPAGENTS_CODE_LANGFUSE_TRACING" (_env_vars.py). 0/false/no/off면 끔
 
 
 def init(environ: Mapping[str, str]) -> bool:
-    """서버 프로세스에서 한 번 부른다. Langfuse 클라이언트를 가림 함수와 함께 만든다. 켜졌는지 돌려준다."""
-    # 1) is_enabled가 False면 False
-    # 2) Langfuse(public_key=..., secret_key=..., host=..., mask=_mask) 를 만든다
-    #    이후 get_client()가 이 설정을 쓴다
-    # 3) 예외는 잡아서 경고를 남기고 False
+    """워크스페이스 환경을 받아, 그 워크스페이스의 실행을 내보내도 되는지 돌려준다."""
+    # 1) is_enabled(environ)가 False면 False (워크스페이스마다 다르다)
+    # 2) 처음이면 Langfuse(public_key=..., secret_key=..., base_url=LANGFUSE_BASE_URL 또는 LANGFUSE_HOST,
+    #    mask_otel_spans=_mask_otel_spans)를 만들고 (public_key, base_url)을 기억한다. 클라이언트는 프로세스에 하나
+    # 3) 이미 만들었으면 (public_key, base_url)이 같을 때만 True. 다르면 경고하고 False(내보내지 않음)
+    # 4) 예외는 잡아서 경고를 남기고 False
 
 
-def _mask(*, data: Any, **_: Any) -> Any:
-    """Langfuse로 보내기 전에 비밀값을 가린다."""
-    # deepagents_code._trace_redaction.create_cached_secret_anonymizer()가 만든 함수를 data에 적용한다
-    # 예외가 나면 "[MASK_FAILED]" 문자열을 돌려준다 (원본을 보내지 않는다)
+def _mask_otel_spans(*, params) -> MaskOtelSpansResult:
+    """내보내기 직전 span 속성(문자열, 문자열 열)마다 비밀값을 가린다."""
+    # deepagents_code._trace_redaction.create_cached_secret_anonymizer()가 만든 함수를 속성 값에 적용한다
+    # 바뀐 속성만 OtelSpanPatch(set_attributes=...)로 돌려준다
+    # 예외가 나면 Langfuse가 그 내보내기 묶음을 통째로 버린다 (원본을 보내지 않는다)
 
 
-def callback_handler() -> BaseCallbackHandler | None:
-    """실행 하나에 붙일 Langfuse 콜백. 꺼져 있으면 None. 부를 때마다 새로 만든다."""
+def run_config(config: Mapping[str, Any] | None, environ: Mapping[str, str]) -> dict[str, Any] | None:
+    """make_graph가 실행에 붙일 설정. init(environ)이 False면 None."""
+    # environ은 그 워크스페이스 런타임의 model_environment
+    # trace_id = Langfuse.create_trace_id(seed=f"{thread_id}:{turn_id 또는 run_id}")
+    # {"callbacks": [CallbackHandler(trace_context={"trace_id": trace_id})],
+    #  "metadata": {"cg_trace_id": trace_id}}
 ```
 
-[확인] `create_cached_secret_anonymizer` (`DC/_trace_redaction.py:135`)는 문자열이나 중첩 구조를 받아 가린 값을 돌려주는 함수를 만든다. Langfuse의 `mask`는 `(*, data, **kwargs) -> Any` 형태다 (`langfuse/types.py:51`).
+[M6 리뷰, DECISIONS O9] `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`, `LANGFUSE_HOST`는 `DC/config.py`의 `_PROJECT_DOTENV_DENIED_ENV_KEYS`에 있다. 클론한 저장소의 프로젝트 `.env`가 추적 전송을 다른 Langfuse로 돌리지 못한다. 키는 셸 환경과 사용자 `~/.deepagents/.env`에서만 온다 (테스트 `test_project_dotenv_cannot_set_langfuse_keys`, 실제 요청에서 프로젝트 `.env`의 `LANGFUSE_BASE_URL=https://evil.invalid`가 무시되고 원래 Langfuse로 간 것을 확인). 그래서 한 서버 프로세스의 워크스페이스들은 같은 키를 보고, 워크스페이스마다 다를 수 있는 것은 꺼짐 스위치뿐이다.
 
-[미확인] `mask`가 `CallbackHandler`가 보내는 LLM 입출력에도 적용되는지. M6에서 가짜 키 형태의 문자열을 넣은 실행으로 확인한다. 적용되지 않으면 `mask_otel_spans` 옵션을 쓴다.
+[확인] `create_cached_secret_anonymizer` (`DC/_trace_redaction.py:135`)는 문자열이나 중첩 구조를 받아 가린 값을 돌려주는 함수를 만든다.
+
+[실행 확인, M6] `mask`는 `CallbackHandler`의 LLM 입출력을 다 덮지 못한다. 가짜 키 `AKIAIOSFODNN7EXAMPLE`을 사람 메시지에 넣은 실행에서 LangGraph `model` 노드(CHAIN)의 입출력에 원문이 올라갔다. 상태 안의 LangChain 메시지 객체를 가림 함수가 들여다보지 못한다. 그래서 `mask` 대신 `mask_otel_spans`를 쓴다. 직렬화된 속성 문자열에 걸리므로 모든 관측이 덮인다. 같은 가짜 키로 실제 서버 실행을 다시 돌려 trace 어디에도 원문이 없는 것을 확인했다.
 
 ### 6.2 핸들러를 붙이는 자리
 
-[확인] 콜백은 서버에서만 붙일 수 있다. `make_graph` (`DC/server_graph.py:1175`)는 실행마다 불리고, 실제 실행일 때만 `runtime.execution_runtime`이 채워진다.
+[확인] 콜백은 서버에서만 붙일 수 있다. `make_graph` (`DC/server_graph.py`)는 실제 실행일 때만 `runtime.execution_runtime`이 채워진다.
 
 ```python
-# make_graph의 끝, 그래프를 돌려주기 직전
-handler = tracing.callback_handler() if execution is not None else None
-if handler is not None:
-    agent = agent.with_config({"callbacks": [handler]})
+# make_graph의 실행 분기 끝, 그래프를 돌려주기 직전
+runtime = await _workspace_runtime(binding)
+run_config = tracing.run_config(config, runtime.model_environment or {})
+return runtime.agent.with_config(run_config) if run_config else runtime.agent
 ```
 
 [확인] `Pregel.with_config`는 `Pregel`을 돌려주므로 서버의 타입 검사를 통과한다 (`langgraph/pregel/main.py:991`). `recursion_limit`은 이 경로로 건드리지 않는다 (`DC/agent.py:3913`의 주석).
 
-`tracing.init`은 서버 추적 설정 함수 `_configure_server_tracing` (`DC/server_graph.py:143`) 옆에서 한 번 부른다.
+[실행 확인, M6] 서버는 한 요청 안에서 `make_graph`를 여러 번 부른다 (`-n` 한 번에 같은 `turn_id`, 다른 `run_id`로 두 번). 부를 때마다 새 trace id를 만들면 한 요청이 trace 19개로 쪼개졌다. 그래서 trace id는 실행 설정의 `metadata.thread_id`와 `metadata.turn_id`(없으면 `configurable.run_id`)를 seed로 `create_trace_id(seed=...)`에서 만든다. 같은 요청이면 몇 번 불러도 같은 trace다. 고친 뒤 실제 요청 하나가 trace 하나(관측 35개)로 모였다. [미확인] 승인 화면 뒤 재개한 실행이 같은 `turn_id`를 받아 같은 trace에 붙는지는 확인하지 않았다. [M6 리뷰] `turn_id`가 없는 실행(예: TUI의 `graph_input` 실행)은 `run_id`로 묶이므로 실행마다 trace가 갈린다. 그때 `after_agent`가 돈 실행의 trace에만 점수가 붙는다.
 
-[미확인] 워크스페이스의 `.env`에 둔 `LANGFUSE_*`가 서버 프로세스의 환경에 닿는지. M6에서 확인한다. 닿지 않으면 `active_environment()`에서 읽어 `Langfuse(...)`에 직접 넘긴다.
+[M6 리뷰] `init`은 `_configure_server_tracing` 옆이 아니라 `run_config` 안에서 실행마다 그 워크스페이스의 환경으로 부른다. 처음 켜진 워크스페이스가 클라이언트를 만들고, 꺼짐 스위치를 켠 워크스페이스는 `run_config`가 None이라 콜백도 구간도 보내지 않는다 (구간은 trace id가 있는 실행 안에서만 보낸다, 6.3).
+
+[실행 확인, M6] 서버는 워크스페이스 환경(`_preview_dotenv_environ`, 런타임의 `model_environment`)을 `init`에 넘기므로 서버 프로세스의 `os.environ`과 관계없이 키를 읽는다 (`active_environment()` 대안과 같은 효과). 처음 확인 때는 워크스페이스 `.env`의 키도 들어갔지만 O9로 막았다 (6.1). 실제 서버 서브프로세스의 `os.environ`은 확인하지 않았다.
 
 **세션과 태그.** 클라이언트의 `build_stream_config` (`DC/config.py:2852`)가 만드는 metadata에 키를 더한다.
 
@@ -1323,10 +1335,21 @@ metadata["langfuse_tags"] = ["dcode-assistant"]
 ### 6.3 구간과 점수
 
 ```python
+def current_trace_id() -> str | None:
+    """langgraph.config.get_config()의 metadata["cg_trace_id"]. 실행 밖이면 None."""
+
+
 @contextmanager
 def span(name: str, *, input: Any = None, metadata: Mapping[str, Any] | None = None,
          as_type: str = "span") -> Iterator[SpanHandle]:
     """구간 하나를 연다. Langfuse가 꺼져 있으면 아무것도 하지 않는 핸들을 준다."""
+    # client.start_observation(..., trace_context={"trace_id": current_trace_id()})
+    # 현재 문맥(current span)을 쓰지 않는다. 끝나면 end()
+
+
+def record(name: str, *, input=None, output=None, level=None, status_message=None,
+           as_type="span") -> None:
+    """곧바로 닫히는 구간 하나 (사건 기록)."""
 
 
 class SpanHandle:
@@ -1337,17 +1360,26 @@ class SpanHandle:
 
 def record_judgment(question: str, state_chars: int, verdict: Verdict) -> None:
     """Jev 판정 하나를 "cg.judge.<질문>" 구간으로 남긴다. as_type="guardrail"."""
+    # J6:<기억 이름>은 구간 이름 cg.judge.J6, 전체 이름은 input에
     # input: 질문 이름과 state 길이만. state 원문은 넣지 않는다
     # output: probability, passed, reason
 
 
-def begin_request(*, thread_id: str | None, human_id: str | None) -> None: ...
-def end_request(*, counters: Mapping[str, int], llm_calls: int, phase: str, plan_id: str | None) -> None:
+def end_request(*, counters: Mapping[str, int], llm_calls: int, review_rounds: int,
+                phase: str, plan_id: str | None) -> None:
     """요청의 지표를 현재 trace에 점수로 붙인다."""
-    # score_current_trace(name="cg.llm_calls", value=...) 등
+    # client.create_score(trace_id=current_trace_id(), name="cg.<키>", value=..., metadata={phase, plan_id})
+    # 전송은 데몬 스레드의 client.flush()로 비우고 최대 2초(FLUSH_WAIT_S)만 기다린다 [M6 리뷰]
+    # flush는 force_flush(30초)와 점수 큐 join이라 그대로 부르면 요청 끝이 수십 초 막힐 수 있다.
+    # 아예 비우지 않으면 비대화 실행이 끝나 서버가 내려갈 때 점수가 사라졌다 (실제 요청으로 확인)
+
+def is_active() -> bool:
+    """클라이언트가 있고 run_config가 붙은 실행 안인가. 구간과 점수는 이때만 보낸다."""
 ```
 
 모든 함수는 예외를 밖으로 던지지 않는다. 추적 실패가 작업을 막으면 안 된다.
+
+[실행 확인, M6] 실행 문맥은 미들웨어 훅까지 이어지지 않는다. `abefore_agent`, `awrap_tool_call`, `aafter_agent`에서 `start_as_current_observation`으로 연 구간이 각각 새 trace가 됐고, `aafter_agent`의 `score_current_trace`는 "No active span"으로 점수를 남기지 못했다. 그래서 6.2의 trace id를 콜백의 `trace_context`와 모든 `cg.*` 구간의 `trace_context`에 같이 넘기고, 점수는 `create_score(trace_id=...)`로 붙인다. 훅과 `asyncio.to_thread` 안에서 `get_config()`의 metadata로 id를 읽는다 (`test_tracing.py`). `cg.*` 구간은 trace 안의 별도 최상위 관측으로 보인다.
 
 **구간 이름.** 평가 4-1과 4-2가 이 표다.
 
@@ -1369,6 +1401,8 @@ def end_request(*, counters: Mapping[str, int], llm_calls: int, phase: str, plan
 
 LLM 호출과 도구 실행은 `CallbackHandler`가 자동으로 남긴다. 코드 변경은 `write_file`과 `edit_file`의 도구 실행 기록이다.
 
+[M6] 표와 다르게 한 것. `cg.human.question`은 대화형에서 답을 받았을 때만 남긴다(`interrupt` 재개 때 도구 본문이 처음부터 다시 돌아 "냈을 때"가 두 번 찍힌다). 비대화는 질문을 낼 때(`asked`)와 다음 메시지로 답할 때(`answered`) 남긴다. `cg.judge.mismatch`는 J5가 "변경 불필요"인데 `submit_plan`이 불린 쪽만 잡는다. 반대쪽(J5가 "변경 필요"인데 계획 없이 끝남)은 아직 없다. `cg.result`는 `complete_plan`의 성공(`done`)과 포기(`failed`)에 남긴다. 테스트 실패는 `cg.test.run`의 ERROR다.
+
 **지표.** 평가 4-3이다. 요청이 끝날 때 trace에 점수로 붙인다.
 
 | 점수 이름 | 출처 |
@@ -1382,23 +1416,23 @@ LLM 호출과 도구 실행은 `CallbackHandler`가 자동으로 남긴다. 코�
 
 실행 시간은 Langfuse가 trace와 구간마다 잰다.
 
-[미확인] 우리 구간이 `CallbackHandler`가 만든 trace 안에 들어가는지. 비동기 그래프에서 실행 문맥이 미들웨어 훅까지 이어져야 한다. M6에서 trace 하나를 조회해 `cg.*` 구간이 같은 trace id를 갖는지 확인한다. 이어지지 않으면 `CallbackHandler(trace_context=...)`와 구간의 `trace_context`에 같은 trace id를 넘긴다. id는 요청 시작 때 만들어 상태에 둔다.
-
 ### 6.4 `runs.py`
 
 Langfuse API를 읽는 코드를 여기에 모은다. 클라이언트(슬래시 명령)와 평가 실행기가 함께 쓴다.
+
+[실행 확인, M6] v1 조회 API는 쓰지 않는다. 이 계정(2026-09-16 뒤 만든 조직)에서 `api.trace.list`, `api.trace.get`, `api.sessions.list`, `api.scores.get_many`가 HTTP 410 `LEGACY_API_UNAVAILABLE_FOR_NEW_ORGANIZATION`이다. Langfuse Cloud 전체에서도 2026-11-16에 없어진다. 쓰는 것은 v2 `api.observations.get_many`, `api.scores_v3.get_many_v3`, `get_trace_url` 셋이다 (DECISIONS O7).
 
 ```python
 @dataclass(frozen=True, slots=True)
 class RunSummary:
     trace_id: str
-    timestamp: str
+    timestamp: str          # trace 관측 중 가장 이른 시작
     name: str
     session_id: str | None
-    latency_s: float | None
+    latency_s: float | None # 가장 이른 시작부터 가장 늦은 끝까지
     scores: Mapping[str, float]
-    error_count: int
-    html_path: str | None
+    error_count: int        # level이 ERROR인 관측 수
+    url: str | None         # get_trace_url. v1의 htmlPath 대신
 
 
 @dataclass(frozen=True, slots=True)
@@ -1412,32 +1446,36 @@ class Failure:
 class RunsClient:
     """Langfuse에서 작업 기록을 읽는다."""
 
-    def __init__(self, environ: Mapping[str, str]) -> None:
-        """Raises: TracingUnavailableError: 키가 없을 때."""
+    def __init__(self, environ: Mapping[str, str], *, client=None) -> None:
+        """Raises: TracingUnavailableError: 키가 없을 때. 클라이언트는 tracing_enabled=False로 만든다."""
 
     def list_runs(self, *, limit: int = 10, session_id: str | None = None) -> list[RunSummary]:
-        # client.api.trace.list(limit=..., session_id=..., tags=["dcode-assistant"], fields="core,scores,metrics")
+        # api.observations.get_many(fields="core,basic", limit=100, cursor=..., filter=JSON)
+        #   filter: traceTags any of ["dcode-assistant"], startTime >= 지금-30일, (sessionId = session_id)
+        # 태그는 콜백이 만든 루트 행에만 붙는다. trace id로 묶어 새것부터 limit개
+        # 각 trace는 observations.get_many(trace_id=...)로 시각, 소요, 오류 수를 재고,
+        # scores_v3.get_many_v3(trace_id=...)로 cg.* 점수를, get_trace_url로 주소를 얻는다
 
     def failures(self, trace_id: str) -> list[Failure]:
-        # client.api.observations.get_many(trace_id=..., limit=100, cursor=...)를 끝까지 읽는다
+        # api.observations.get_many(trace_id=..., from_start_time=지금-30일, limit=100, cursor=...)를 끝까지 읽는다
         # level이 ERROR 또는 WARNING인 것, 이름이 "cg.gate.deny"인 것을 시간순으로 돌려준다
 
     def signals(self, trace_ids: Sequence[str]) -> dict[str, dict[str, float]]:
-        """trace별 cg.* 점수를 돌려준다. 자기 개선과 평가 실행기가 쓴다."""
+        """trace별 cg.* 점수 (scores_v3). 자기 개선과 평가 실행기가 쓴다."""
 
     def wait_for(self, trace_id: str, *, attempts: int = 6, delay_s: float = 5.0) -> bool:
         """trace가 조회될 때까지 기다린다. 끝내 안 보이면 False."""
 
 
-def format_run_list(runs: Sequence[RunSummary], host: str) -> str:
+def format_run_list(runs: Sequence[RunSummary]) -> str:
     """/runs 목록 화면의 문자열."""
 
 
-def format_run_detail(run: RunSummary, failures: Sequence[Failure], host: str) -> str:
+def format_run_detail(run: RunSummary, failures: Sequence[Failure]) -> str:
     """/runs <id> 화면의 문자열. 실패 구간, 원인, 지표, Langfuse 주소."""
 ```
 
-[확인] 조회 API와 반환 필드는 `langfuse/api/trace/client.py:37`, `:124`와 `langfuse/api/observations/client.py:28`에 있다. 수업의 사용 예는 `Day05_new/eval_lab/evidence.py:65`다. 쓰기는 비동기라 전송을 비운 뒤에도 15~30초 뒤에 보일 수 있다.
+[M6] `format_*`는 `host` 인자를 받지 않는다. 주소는 `RunSummary.url`에 있다. 쪽 수는 조회 하나에 20쪽(2,000행)까지 읽는다. 공유 프로젝트라 태그 필터를 늘 건다. 쓰기는 비동기라 전송을 비운 뒤에도 수십 초 뒤에 보일 수 있다 (실제 요청은 40초 뒤 조회에서 보였다).
 
 [확정] 신호의 출처는 Langfuse API뿐이다. 로컬 기록 파일은 두지 않는다. 키가 없으면 `/runs`와 `/improve`는 "Langfuse 키가 없어 기록이 없습니다"를 출력한다.
 
@@ -1896,6 +1934,8 @@ M3에서 미룬 것: `_cg_counters`와 `aafter_agent`는 소비자인 `tracing.p
 
 검사: `test_tracing.py`, `test_runs.py` 통과(가짜 클라이언트). 실제 Langfuse 키로 요청 하나를 돌리고 `RunsClient.list_runs`와 `failures`가 결과를 돌려주는지. 가짜 비밀값이 가려져 올라갔는지.
 
+[M6] 확인 결과로 바꾼 것: 같은 trace는 seed로 만든 trace id를 콜백과 구간에 같이 넘긴다(6.2, 6.3). 가림은 `mask_otel_spans`(6.1). 키는 워크스페이스 환경으로 `run_config`가 `init`을 부른다(6.2). 프로젝트 `.env`의 `LANGFUSE_*`는 막는다(6.1, O9). 조회는 v2 관측 API와 v3 점수 API(6.4, DECISIONS O7). 점수는 `create_score(trace_id=...)`.
+
 ### M7. 슬래시 명령과 개선안
 
 `improve.py`, `propose_improvement`, `/runs`, `/improve`, `/trace`.
@@ -1990,3 +2030,6 @@ README에 함께 적는 것. 필요한 키와 없을 때의 동작, 게이트 �
 - 자기 개선 검증은 회귀 검사다. 개선안이 실제로 도움이 됐는지는 입증하지 않는다.
 - 신호의 임계값과 Jev 임계값의 시작값은 근거 없이 정했다.
 - 평가 방법론 조사의 인용은 원문 대조를 거치지 못했다.
+- [M6] 게이트는 도구 결과를 카운터와 함께 `Command`로 감싼다. 게이트 바깥 미들웨어가 `ToolMessage`를 기대하면 동작이 바뀐다. `ask_user`는 `AskUserMiddleware`의 인자 거절 경고가 `ToolMessage`를 봐야 해서 감싸지 않는다(그래서 `cg.tool_calls`에 들어가지 않는다). `MemoryGuardMiddleware`가 관리 블록을 되돌리며 결과를 오류 `ToolMessage`로 바꾸면 그 호출의 카운터 증가분이 사라진다.
+- [M6] 추적이 켜진 실행에서는 `cg.memory.inject`에 상한으로 뺀 기억을 적으려고 요청 시작 때 주입 글을 한 번 더 만든다. 추적이 꺼져 있으면 만들지 않는다.
+- [M6] 서브에이전트 안의 도구 호출은 카운터에 들어가지 않는다. 승인 화면에서 멈춘 실행에는 `after_agent`가 돌지 않아 점수가 없다.

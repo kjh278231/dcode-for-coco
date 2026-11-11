@@ -418,6 +418,11 @@ _PROJECT_DOTENV_DENIED_ENV_KEYS = frozenset(
         PLUGIN_CACHE_DIR,
         SHELL_ALLOW_LIST,
         EXTRA_SKILLS_DIRS,
+        # 클론한 저장소의 .env가 추적 전송을 남의 Langfuse로 돌리지 못하게 한다
+        "LANGFUSE_PUBLIC_KEY",
+        "LANGFUSE_SECRET_KEY",
+        "LANGFUSE_BASE_URL",
+        "LANGFUSE_HOST",
     }
 )
 """Env keys a *project* `.env` must not inject, even though they are otherwise
@@ -2881,6 +2886,10 @@ def build_stream_config(
 
     if skill_name:
         metadata["ls_skill_name"] = skill_name
+
+    # Langfuse: 한 대화의 요청을 한 세션으로 묶고, 공유 프로젝트에서 우리 trace를 고른다
+    metadata["langfuse_session_id"] = thread_id
+    metadata["langfuse_tags"] = ["dcode-assistant"]
 
     # Record the launch environment so traces are groupable by terminal.
     # Blank is treated as unset, matching the other readers. Not a contract key.

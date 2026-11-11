@@ -25,7 +25,7 @@ from langchain.agents.middleware.types import (
 from langchain_core.messages import HumanMessage
 
 from deepagents_code._paths import project_paths
-from deepagents_code.assistant import frontmatter
+from deepagents_code.assistant import frontmatter, tracing
 from deepagents_code.assistant.decider import questions_j6
 from deepagents_code.assistant.options import PHASE_KEY, PLAN_ID_KEY
 from deepagents_code.assistant.plan import PlanFormatError, PlanStore
@@ -453,6 +453,12 @@ class MemoryInjectionMiddleware(AgentMiddleware):
             selected = [
                 r.name for r, v in zip(records, verdicts, strict=True) if v.passed
             ]
+        if tracing.is_active():  # 뺀 것을 기록하려고 주입 글을 한 번 더 만든다
+            _, trimmed = self._build({SELECTED_KEY: selected})
+            tracing.record(
+                "cg.memory.inject",
+                output={"candidates": len(records), "selected": selected, **trimmed},
+            )
         return {SELECTED_KEY: selected, HUMAN_ID_KEY: human.id}
 
     def before_agent(
@@ -478,6 +484,10 @@ class MemoryInjectionMiddleware(AgentMiddleware):
         return await asyncio.to_thread(self._select, state)
 
     def _block(self, state: Mapping[str, Any]) -> str | None:
+        return self._build(state)[0]
+
+    def _build(self, state: Mapping[str, Any]) -> tuple[str | None, dict[str, Any]]:
+        # (주입 글, 상한으로 뺀 것의 기록)
         index = self._store.read_index().strip()
         rules = self._store.list_records("rule")
         works = []
@@ -487,9 +497,17 @@ class MemoryInjectionMiddleware(AgentMiddleware):
             except (FileNotFoundError, MemoryFormatError) as exc:
                 logger.warning("선택된 작업 기록을 읽지 못했다 %s: %s", name, exc)
         if not (rules or works or "\n- " in f"\n{index}"):
-            return None  # 기억이 하나도 없다
+            return None, {}  # 기억이 하나도 없다
         index = _tail_index(index)
-        parts = _fit([*rules, *works], INJECT_MAX_CHARS - len(index))
+        records = [*rules, *works]
+        parts = _fit(records, INJECT_MAX_CHARS - len(index))
+        trimmed: dict[str, Any] = {
+            "body_dropped": [
+                r.name
+                for r, p in zip(records, parts, strict=True)
+                if p != f"### {r.name}\n{r.body.strip()}"
+            ]
+        }
         rule_parts, work_parts = parts[: len(rules)], parts[len(rules) :]
         sections = [f"## 색인\n{index}"]
         if rule_parts:
@@ -499,7 +517,9 @@ class MemoryInjectionMiddleware(AgentMiddleware):
         inner = _neutral("\n\n".join(sections))
         if len(inner) > INJECT_MAX_CHARS:  # 생략 줄이 많아도 전체를 상한 안에 둔다
             inner = inner[:INJECT_MAX_CHARS] + "\n(상한을 넘어 잘림)"
-        return f"<project_memory>\n\n{inner}\n\n</project_memory>\n\n{_GUIDE}"
+            trimmed["truncated"] = True
+        block = f"<project_memory>\n\n{inner}\n\n</project_memory>\n\n{_GUIDE}"
+        return block, trimmed
 
     def wrap_model_call(
         self,

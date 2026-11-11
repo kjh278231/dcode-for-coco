@@ -74,6 +74,8 @@ NEEDS_CHANGE_KEY = "_cg_needs_change"
 LAST_HUMAN_ID_KEY = "_cg_last_human_id"
 APPROVED_HUMAN_ID_KEY = "_cg_approved_human_id"
 REQUEST_TEXT_KEY = "_cg_request_text"
+COUNTERS_KEY = "_cg_counters"
+LAST_ERROR_KEY = "_cg_last_error"
 
 
 @dataclass(frozen=True, slots=True)

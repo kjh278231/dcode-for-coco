@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
-from deepagents_code.assistant import prompts
+from deepagents_code.assistant import prompts, tracing
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -82,6 +82,24 @@ class PlanReviewer:
         Returns:
             리뷰 결과. 실패하면 error에 예외 종류 이름을 담는다.
         """
+        with tracing.span("cg.plan.review", input={"plan_id": plan.id}) as span:
+            result = await self._areview(plan, verdicts, format_issues)
+            span.update(
+                output={
+                    "comments": len(result.comments),
+                    "questions": len(result.questions),
+                    "error": result.error,
+                },
+                level="ERROR" if result.error else None,
+            )
+        return result
+
+    async def _areview(
+        self,
+        plan: Plan,
+        verdicts: Sequence[Verdict],
+        format_issues: Sequence[str],
+    ) -> ReviewResult:
         messages = [
             SystemMessage(prompts.REVIEWER_SYSTEM),
             HumanMessage(_review_input(plan, verdicts, format_issues)),

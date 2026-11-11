@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, ClassVar, Literal, Protocol
 import httpx
 
 from deepagents_code._env_vars import PLAN_GATE, PLAN_GATE_JEV_THRESHOLD
+from deepagents_code.assistant import tracing
 from deepagents_code.assistant.options import JEV_THRESHOLD_DEFAULT
 
 if TYPE_CHECKING:
@@ -162,6 +163,8 @@ class JevDecider:
         step = self.MAX_QUESTIONS_PER_CALL
         for start in range(0, len(questions), step):
             verdicts.extend(self._judge_chunk(state, questions[start : start + step]))
+        for question, verdict in zip(questions, verdicts, strict=True):
+            tracing.record_judgment(question.name, len(state), verdict)
         return verdicts
 
     def _judge_chunk(self, state: str, questions: Sequence[Noul]) -> list[Verdict]:

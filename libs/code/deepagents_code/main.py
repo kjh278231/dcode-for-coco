@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from deepagents_code.notifications import PendingNotification
     from deepagents_code.thread_ownership import ThreadLease
 
-from deepagents_code._env_vars import LAUNCH_TERM_PROGRAM
+from deepagents_code._env_vars import LANGFUSE_TRACING, LAUNCH_TERM_PROGRAM
 from deepagents_code._paths import PATHS, get_deepagents_home
 from deepagents_code._version import __version__
 from deepagents_code.assistant.options import plan_gate_enabled
@@ -5513,8 +5513,11 @@ def cli_main() -> None:
 
     try:
         args = parse_args()
+        # LangSmith는 쓰지 않는다 (SPEC 6.6). 추적은 Langfuse로 한다
+        os.environ.setdefault("DEEPAGENTS_CODE_LANGSMITH_TRACING", "false")
         if getattr(args, "no_tracing", False):
             os.environ["DEEPAGENTS_CODE_LANGSMITH_TRACING"] = "false"
+            os.environ[LANGFUSE_TRACING] = "false"
         _install_cli_provider(args)
         explicit_approval_flag = (
             "--yolo"

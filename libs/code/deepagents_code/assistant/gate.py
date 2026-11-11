@@ -20,14 +20,16 @@ from langchain.agents.middleware.types import (
 from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.types import Command
 
-from deepagents_code.assistant import prompts
+from deepagents_code.assistant import prompts, tracing
 from deepagents_code.assistant.decider import question_j4, question_j5
 from deepagents_code.assistant.options import (
     APPROVE_WORDS,
     APPROVED_HUMAN_ID_KEY,
     ASYNC_SUBAGENT_TOOLS,
+    COUNTERS_KEY,
     EXPLORED_KEY,
     EXPLORER_SUBAGENT_NAME,
+    LAST_ERROR_KEY,
     LAST_HUMAN_ID_KEY,
     NEEDS_CHANGE_KEY,
     OTHER_MUTATING_TOOLS,
@@ -90,6 +92,31 @@ _J5_YES = "\n\n[판정] 이 요청은 코드 변경이 필요하다. submit_plan
 _J5_NO = "\n\n[판정] 이 요청은 코드 변경이 필요 없어 보인다. 탐색 결과로 답하라."
 
 
+def _last_value(left: str | None, right: str | None) -> str | None:
+    """병렬 도구 호출이 한 단계에 같이 써도 되게 하는 리듀서. 나중 값이 이긴다.
+
+    Returns:
+        right.
+    """
+    del left
+    return right
+
+
+def _merge_counters(
+    left: dict[str, int] | None, right: dict[str, int] | None
+) -> dict[str, int]:
+    """키별로 더한다. `__reset__`이 있으면 빈 사전에서 다시 센다.
+
+    Returns:
+        합친 카운터.
+    """
+    right = dict(right or {})
+    merged = {} if right.pop("__reset__", 0) else dict(left or {})
+    for key, value in right.items():
+        merged[key] = merged.get(key, 0) + value
+    return merged
+
+
 class PlanGateState(AgentState):
     """계획 게이트가 그래프 상태에 두는 값. 전부 비공개 채널이다."""
 
@@ -101,6 +128,10 @@ class PlanGateState(AgentState):
     _cg_last_human_id: NotRequired[Annotated[str | None, PrivateStateAttr]]
     _cg_approved_human_id: NotRequired[Annotated[str | None, PrivateStateAttr]]
     _cg_request_text: NotRequired[Annotated[str, PrivateStateAttr]]
+    _cg_counters: NotRequired[
+        Annotated[dict[str, int], PrivateStateAttr, _merge_counters]
+    ]
+    _cg_last_error: NotRequired[Annotated[str | None, PrivateStateAttr, _last_value]]
 
 
 def precheck_denies(state: object, tool_call: object) -> bool:
@@ -143,6 +174,33 @@ def _text_of(message: Any) -> str:  # noqa: ANN401  # ToolMessage 또는 사람 
         part.get("text", "") if isinstance(part, dict) else str(part)
         for part in content
     )
+
+
+def _message_of(result: object) -> ToolMessage | None:
+    # 도구 결과가 Command면 update["messages"]의 마지막 ToolMessage
+    if isinstance(result, ToolMessage):
+        return result
+    if isinstance(result, Command) and isinstance(result.update, dict):
+        messages = result.update.get("messages") or []
+        return next((m for m in reversed(messages) if isinstance(m, ToolMessage)), None)
+    return None
+
+
+def _with_updates(
+    result: ToolMessage | Command[Any], updates: dict[str, Any]
+) -> ToolMessage | Command[Any]:
+    # 카운터 증가분을 도구 결과에 실어 상태에 남긴다 (SPEC 3.7)
+    if isinstance(result, ToolMessage):
+        return Command(update={"messages": [result], **updates})
+    if result.graph is not None or not isinstance(result.update, dict):
+        return result  # 부모 그래프로 가는 Command는 건드리지 않는다
+    update = dict(result.update)
+    if COUNTERS_KEY in update:  # 도구가 직접 센 값 (complete_plan의 test_failures)
+        updates = {
+            **updates,
+            COUNTERS_KEY: _merge_counters(update[COUNTERS_KEY], updates[COUNTERS_KEY]),
+        }
+    return dataclasses.replace(result, update={**update, **updates})
 
 
 def _deny(request: ToolCallRequest, reason: str) -> ToolMessage:
@@ -193,9 +251,16 @@ class PlanGateMiddleware(AgentMiddleware):
         if human is None or human.id == state.get(LAST_HUMAN_ID_KEY):
             return None  # 사람 메시지가 없거나 멈춤 뒤 재개된 실행이다
         text = _text_of(human)
+        breakdown = state.get("_session_cost_breakdown") or {}
         updates: dict[str, Any] = {
             LAST_HUMAN_ID_KEY: human.id,
             REQUEST_TEXT_KEY: text[:REQUEST_TEXT_MAX],
+            # LLM 호출 수는 대화 누적이라 요청 시작 값을 적어 두고 차이를 쓴다
+            COUNTERS_KEY: {
+                "__reset__": 1,
+                "llm_base": int(breakdown.get("request_count", 0)),
+            },
+            LAST_ERROR_KEY: None,
         }
         phase = state.get(PHASE_KEY, "idle")
         if phase == "awaiting_approval":
@@ -223,14 +288,19 @@ class PlanGateMiddleware(AgentMiddleware):
         questions = plan.open_questions()
         if word in APPROVE_WORDS and not questions:
             self._store.save(plan.with_updates(status="approved"))
+            tracing.record("cg.plan.approval", output={"result": "approved"})
             updates[APPROVED_HUMAN_ID_KEY] = human_id
             return "executing"
         if word in REJECT_WORDS:
             self._store.save(plan.with_updates(status="rejected"))
+            tracing.record("cg.plan.approval", output={"result": "rejected"})
             return "idle"
         if questions:
             # 메시지 하나가 질문 전부에 대한 답이다
             plan = record_answers(plan, [("; ".join(questions), text.strip())])
+            tracing.record("cg.human.question", output={"answered": len(questions)})
+        else:
+            tracing.record("cg.plan.approval", output={"result": "revise"})
         self._store.save(plan.with_updates(status="draft", review_round=0))
         updates[REVIEW_ROUND_KEY] = 0
         return "planning"
@@ -369,23 +439,22 @@ class PlanGateMiddleware(AgentMiddleware):
             plan = self._load(plan_id)
             if plan is not None and target not in plan.targets:
                 self._store.save(plan.with_updates(targets=(*plan.targets, target)))
+                tracing.record("cg.scope.extend", output={"added": target})
 
     def _explored(
         self, request: ToolCallRequest, result: ToolMessage | Command[Any]
     ) -> ToolMessage | Command[Any]:
         # 탐색 결과에 J5 판정을 붙이고 탐색 완료를 상태에 적는다
-        message = result
-        if isinstance(result, Command):
-            update = result.update if isinstance(result.update, dict) else {}
-            messages = update.get("messages") or []
-            message = next(
-                (m for m in reversed(messages) if isinstance(m, ToolMessage)), None
-            )
-        if not isinstance(message, ToolMessage) or message.status == "error":
+        message = _message_of(result)
+        if message is None or message.status == "error":
             return result
         summary = _text_of(message)
         text, question = question_j5(request.state.get(REQUEST_TEXT_KEY, ""), summary)
         passed = self._options.decider.judge(text, [question])[0].passed
+        tracing.record(
+            "cg.explore",
+            output={"summary_chars": len(summary), "needs_change": passed},
+        )
         judged = message.model_copy(
             update={"content": summary + (_J5_YES if passed else _J5_NO)}
         )
@@ -397,6 +466,38 @@ class PlanGateMiddleware(AgentMiddleware):
             ]
             return dataclasses.replace(result, update={**update, **flags})
         return Command(update={"messages": [judged], **flags})
+
+    @staticmethod
+    def _counted(
+        request: ToolCallRequest,
+        result: ToolMessage | Command[Any],
+        denied: str | None = None,
+    ) -> ToolMessage | Command[Any]:
+        # 카운터 증가분을 정하고 거부를 기록한다 (SPEC 3.7 6~8단계)
+        name = request.tool_call["name"]
+        if name == "ask_user":
+            # AskUserMiddleware가 ToolMessage로 거절 경고를 남긴다. 감싸지 않는다
+            return result
+        signature = summarize_call(name, request.tool_call.get("args") or {})
+        message = _message_of(result)
+        failed = message is not None and message.status == "error"
+        delta = {"tool_calls": 1}
+        if failed:
+            delta["tool_errors"] = 1
+            if request.state.get(LAST_ERROR_KEY) == signature:
+                delta["repeat_failures"] = 1
+        if denied is not None:
+            delta["gate_denies"] = 1
+            if denied == "out_of_scope":
+                delta["jev_denies"] = 1
+            tracing.record(
+                "cg.gate.deny",
+                input={"tool": name, "reason": denied},
+                level="WARNING",
+                status_message=denied,
+            )
+        updates = {COUNTERS_KEY: delta, LAST_ERROR_KEY: signature if failed else None}
+        return _with_updates(result, updates)
 
     def wrap_tool_call(
         self,
@@ -410,12 +511,12 @@ class PlanGateMiddleware(AgentMiddleware):
         """
         decision, reason, target = self._decide(request)
         if decision == "deny":
-            return _deny(request, reason)
+            return self._counted(request, _deny(request, reason), reason)
         if decision == "explore":
-            return self._explored(request, handler(request))
+            return self._counted(request, self._explored(request, handler(request)))
         result = handler(request)
         self._extend_targets(request.state.get(PLAN_ID_KEY), target, result)
-        return result
+        return self._counted(request, result)
 
     async def awrap_tool_call(
         self,
@@ -429,15 +530,55 @@ class PlanGateMiddleware(AgentMiddleware):
         """
         decision, reason, target = await asyncio.to_thread(self._decide, request)
         if decision == "deny":
-            return _deny(request, reason)
-        if decision == "explore":
-            result = await handler(request)
-            return await asyncio.to_thread(self._explored, request, result)
+            denied = _deny(request, reason)
+            return await asyncio.to_thread(self._counted, request, denied, reason)
         result = await handler(request)
-        await asyncio.to_thread(
-            self._extend_targets, request.state.get(PLAN_ID_KEY), target, result
+        if decision == "explore":
+            result = await asyncio.to_thread(self._explored, request, result)
+        else:
+            await asyncio.to_thread(
+                self._extend_targets, request.state.get(PLAN_ID_KEY), target, result
+            )
+        return await asyncio.to_thread(self._counted, request, result)
+
+    # ----- 요청의 끝 -----
+
+    def _end_request(self, state: Mapping[str, Any]) -> None:
+        counters = state.get(COUNTERS_KEY) or {}
+        breakdown = state.get("_session_cost_breakdown") or {}
+        llm_calls = int(breakdown.get("request_count", 0)) - counters.get("llm_base", 0)
+        plan = self._load(state.get(PLAN_ID_KEY))
+        tracing.end_request(
+            counters=counters,
+            llm_calls=max(llm_calls, 0),
+            review_rounds=plan.review_round if plan else 0,
+            phase=state.get(PHASE_KEY, "idle"),
+            plan_id=plan.id if plan else None,
         )
-        return result
+
+    def after_agent(
+        self, state: PlanGateState, runtime: Runtime[Any]
+    ) -> dict[str, Any] | None:
+        """요청의 지표를 trace에 점수로 붙인다.
+
+        Returns:
+            None. 상태를 바꾸지 않는다.
+        """
+        del runtime
+        self._end_request(state)
+        return None
+
+    async def aafter_agent(
+        self, state: PlanGateState, runtime: Runtime[Any]
+    ) -> dict[str, Any] | None:
+        """요청의 지표를 trace에 점수로 붙인다.
+
+        Returns:
+            None. 상태를 바꾸지 않는다.
+        """
+        del runtime
+        await asyncio.to_thread(self._end_request, state)
+        return None
 
 
 class SubagentWriteBlockMiddleware(AgentMiddleware):

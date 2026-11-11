@@ -161,4 +161,35 @@
   - 해결(DECISIONS.md O6): 업스트림 테스트끼리의 상태 누수다. M0 원본 코드에서도 `test_auth_web_search_restart.py` 다음에 돌리면 같은 17건이 실패한다. `check.sh baseline`이 새 실패를 xdist 없이 따로 다시 돌리게 했다. 다시 돌린 결과: 순서 의존 17건, 따로 돌려도 실패하는 새 실패 0건, 통과.
   - 재현: `test_auth_web_search_restart.py` 전체(기준선의 16 errors, `Credentials`에 `tavily_api_key` 없음) 뒤에 같은 프로세스에서 `TestStartupAutoUpdate`를 돌리면 17건 실패. HEAD(M4, M5 변경 stash)에서도 같은 순서로 20건 실패(17 + 키 2 + 1). 두 파일 단독은 모두 통과. 업스트림 테스트끼리의 상태 누수이고, M5에서 테스트 수가 바뀌어 xdist가 두 파일을 같은 워커에 놓게 된 것으로 보인다. 누수 지점은 찾지 못했다.
 
-## M6. 추적 — 다음
+## M6. 추적 — 완료 (2026-11-11)
+
+- 추가: `deepagents_code/assistant/{tracing,runs}.py`, `tests/unit_tests/assistant/{test_tracing,test_runs}.py`.
+- 수정(assistant): `gate.py`(`_cg_counters` 리듀서, `_cg_last_error`, 카운터 갱신을 `Command`로 싣기, `after_agent`/`aafter_agent` → `end_request`, `cg.gate.deny`·`cg.scope.extend`·`cg.explore`·비대화 `cg.plan.approval`), `tools.py`(`cg.plan.submit`, `cg.judge.mismatch`, `cg.human.question`, `cg.plan.approval`, `cg.test.run`, `cg.result`, 테스트 실패 `test_failures`), `decider.py`(`JevDecider.judge`의 `record_judgment`, M2에서 미룸), `reviewer.py`(`cg.plan.review`, M2에서 미룸), `memory.py`(`cg.memory.inject`와 상한으로 뺀 기억, M5에서 미룸), `options.py`(`COUNTERS_KEY`, `LAST_ERROR_KEY`).
+- 수정(업스트림): `_env_vars.py`(`LANGFUSE_TRACING = "DEEPAGENTS_CODE_LANGFUSE_TRACING"`, SPEC 1.4는 M3라 했지만 없었다), `server_graph.py`(`tracing.init(workspace_env)`, `make_graph`의 `tracing.run_config(config)`), `config.py`(`build_stream_config`에 `langfuse_session_id`, `langfuse_tags`), `main.py`(LangSmith 기본 끄기, `--no-tracing`이 Langfuse도 끔).
+- 먼저 확인한 [미확인] (가짜 모델 + 실제 Langfuse 스크립트, 그다음 실제 서버):
+  - 같은 trace: 아니었다. 훅에서 연 구간이 각각 새 trace, `aafter_agent`의 `score_current_trace`는 "No active span". SPEC 대안(같은 trace id를 콜백과 구간 `trace_context`에)으로 한 trace에 모였다. 점수는 `create_score(trace_id=...)`.
+  - 실제 서버에서 하나 더: 서버가 한 요청에 `make_graph`를 여러 번 부른다(`-n` 한 번에 같은 `turn_id`, 다른 `run_id` 둘). 부를 때마다 새 id면 요청 하나가 trace 19개로 쪼개졌다. id를 `create_trace_id(seed=f"{thread_id}:{turn_id}")`로 바꿔 trace 하나로 모았다(SPEC 6.2).
+  - `mask` 범위: 일부만. LangGraph `model` 노드 입출력에 가짜 키 원문이 올라갔다(메시지 객체를 못 들여다봄). SPEC 대안 `mask_otel_spans`로 바꿔 전부 가려졌다.
+  - 서버 환경의 키: 워크스페이스 `.env`의 가짜 `LANGFUSE_*`가 `workspace_env`에 들어간다. `init(workspace_env)`로 받는다. 실제 서버 서브프로세스 `os.environ`은 확인 안 함.
+- Langfuse 조회 API: v1 `trace.list`, `trace.get`, `sessions.list`, `scores.get_many`가 이 계정에서 HTTP 410 `LEGACY_API_UNAVAILABLE_FOR_NEW_ORGANIZATION`(2026-09-16 뒤 만든 조직, Cloud 전체는 2026-11-16 종료). SPEC 13장으로 멈췄고 DECISIONS O7로 v2 `observations.get_many`(태그 `dcode-assistant` + 시작 시각 창, trace id로 묶음), `scores_v3.get_many_v3`, `get_trace_url`로 다시 짰다. `RunSummary.html_path` → `url`.
+- 검사:
+  - `check.sh unit` 206 passed (새 테스트 24: `test_tracing.py` 17, `test_runs.py` 7). 훅과 `to_thread` 안 구간이 실행 설정의 trace id를 쓰는지 실제 그래프로, 같은 요청은 같은 id, 거부 카운터와 연속 실패, 새 요청의 0 초기화, `complete_plan` 실패의 `test_failures`와 `cg.test.run` ERROR, `mask_otel_spans`, 리뷰어·Jev·Memory 구간, 꺼졌을 때 무동작, 클라이언트 예외 삼킴, `list_runs` 묶음과 쪽 넘김과 태그·세션 필터, `failures` 순서, `wait_for`, 화면 문자열.
+  - `check.sh lint` 통과.
+  - `check.sh baseline` 86 failed, 10507 passed(10316 + assistant 206 - 순서 의존 15), 26 skipped, 16 errors, 2 warnings. 새 실패 15건은 모두 `test_main.py::TestStartupAutoUpdate`이고 따로 돌리면 통과(O6 순서 의존). 따로 돌려도 실패하는 새 실패 0건.
+  - 실제 요청 (임시 저장소, `opengateway:z-ai/glm-5.3-flash-ultrafast`, Jev는 OpenRouter, 프롬프트에 가짜 키 `AKIAIOSFODNN7EXAMPLE`, "계획 없이 execute로 rm -f scratch.txt"): 게이트가 거부했다. 40초 뒤 `RunsClient.list_runs(session_id=...)` 1건(trace 하나, 관측 35, 3.6초), `failures` = `WARNING cg.gate.deny: no_approved_plan`, 점수 8개(`cg.tool_calls 1`, `cg.tool_errors 1`, `cg.gate_denies 1`, `cg.llm_calls 2`, 나머지 0), 주소 있음. trace와 그 시간대 모든 관측에 가짜 키 원문 없음(`[SECRET_DETECTED]`로 올라감).
+  - 그 전 실제 요청 1회(trace id 고치기 전, 탐색·계획 제출 2회·승인 요청)는 쪼개진 trace로 문제를 찾는 데 썼다.
+- 명세와 다르게 한 점 (SPEC 본문에 반영함): `mask` 대신 `mask_otel_spans`. `callback_handler()` 대신 `run_config(config)`(콜백과 trace id를 함께, seed로 요청당 하나). `begin_request` 없음. `end_request`에 `review_rounds` 인자, 끝에 `flush`. 사건 기록용 `record()` 추가, `span()`은 현재 문맥을 쓰지 않는 `start_observation`. `cg.human.question`은 대화형에서 답할 때만, `cg.judge.mismatch`는 "J5 불필요인데 제출" 쪽만. `format_*`에서 `host` 인자 뺌. `_cg_last_error` 비공개 키 추가.
+- 확인 못 한 것: 승인 화면에서 멈춘 실행에는 `after_agent`가 돌지 않아 점수가 없다. 재개한 실행이 끝날 때 요청 전체 값으로 붙는다. 재개 실행이 같은 `turn_id`를 받아 같은 trace에 붙는지는 대화형 승인 흐름으로 확인하지 않았다. 서브에이전트 안의 도구 호출은 카운터에 들어가지 않는다. 실제 서버 서브프로세스의 `os.environ`, TUI 실행은 확인 안 했다. `ty`는 돌리지 않았다. Plan의 `trace_ids`는 아직 채우지 않는다.
+
+- 리뷰 뒤 수정 (2026-11-11):
+  - `_cg_last_error`에 리듀서(나중 값)가 없어 한 메시지의 도구 호출이 둘 이상이면 `InvalidUpdateError`가 났다. 고쳤고 실제 그래프로 병렬 거부 둘, 병렬 허용 둘을 테스트한다(`FilesystemMiddleware`가 같은 경로 병렬 쓰기를 먼저 막아서 경로를 달리했다).
+  - `end_request`의 `flush()`가 요청 끝을 수십 초 막을 수 있었다. 데몬 스레드로 비우고 최대 2초만 기다린다. 아예 안 기다리게 했더니 비대화 실제 요청에서 점수가 사라져(서버가 먼저 내려감) 2초 대기로 바꿨고, 다시 돌려 점수 8개가 올라간 것을 확인했다.
+  - 워크스페이스별 설정: `init`을 `run_config(config, runtime.model_environment)` 안에서 그 워크스페이스 환경으로 부른다. 꺼짐 스위치를 켠 워크스페이스는 콜백도 구간도 보내지 않는다(구간은 trace id가 있는 실행에서만). 처음과 다른 키·주소면 경고하고 보내지 않는다. 서버 시작 경로의 `init` 호출은 뺐다.
+  - O9: `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`, `LANGFUSE_HOST`를 `_PROJECT_DOTENV_DENIED_ENV_KEYS`에 더했다. 사용자 `~/.deepagents/.env`와 셸은 그대로 된다(테스트). 실제 요청: 프로젝트 `.env`에 `LANGFUSE_BASE_URL=https://evil.invalid`를 둔 저장소에서도 원래 Langfuse로 갔다. 그래서 위의 "워크스페이스 `.env`의 키가 `workspace_env`에 들어간다"는 이제 막힌다.
+  - `ask_user` 결과는 `Command`로 감싸지 않는다(`AskUserMiddleware` 거절 경고 유지, 카운트 안 함). `MemoryGuardMiddleware`가 결과를 바꾸면 증가분이 사라지는 것은 SPEC 14장에 적었다.
+  - `runs.py`의 `langfuse` import를 `tracing.api_client`로 옮겼다(SPEC 9.4). `cg.memory.inject`의 주입 글 재계산은 추적 중일 때만 한다.
+  - 테스트 추가: 병렬 호출, 동기 그래프(거부와 허용, `after_agent`), `llm_calls` 차이(동기·비동기 `after_agent`, 시작 때 `llm_base`), run id 대체 seed, 워크스페이스 꺼짐·다른 키, 실행 밖 구간 미전송, 프로젝트 `.env` 차단. 변이 6개(`_cg_last_error` 리듀서 제거, 동기 허용·거부 경로의 `_counted` 제거, 동기 `after_agent` 무동작, `llm_calls=0`, run id 대체 제거) 모두 테스트가 실패하는 것을 확인했다.
+  - 문서: SPEC 6.2에 turn id가 없을 때 실행마다 trace가 갈리는 것, 재개가 같은 trace인지는 [미확인]으로 고쳤다.
+  - 검사: `check.sh unit` 210 passed, `check.sh lint` 통과, `check.sh baseline` 84 failed, 10513 passed(10316 + 210 - 순서 의존 13), 26 skipped, 16 errors, 2 warnings. 새 실패 13건 모두 `TestStartupAutoUpdate`이고 따로 돌리면 통과(O6). 따로 돌려도 실패하는 새 실패 0건. 실제 요청 2회 더(재검증).
+
+## M7. 슬래시 명령과 개선안 — 다음
