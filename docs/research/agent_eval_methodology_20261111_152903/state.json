@@ -1,0 +1,60 @@
+{
+  "session_id": "agent_eval_methodology_20261111_152903",
+  "ledger_schema": 2,
+  "topic": "코딩 에이전트 평가 방법론",
+  "created_at": "2026-11-11T06:29:03Z",
+  "updated_at": "2026-11-11T06:29:03Z",
+  "status": "PHASE_3_QUERYING",
+  "current_phase": 3,
+  "exec_mode": "workflow-fanout",
+  "requirements": {
+    "focus": [
+      "방법론 분류",
+      "비결정성 전후 비교",
+      "작은 과제 묶음 회귀",
+      "코딩 벤치마크 채점",
+      "게이트 검증"
+    ],
+    "output_format": "executive_summary",
+    "audience": "developer",
+    "sources": {
+      "min_quality": "B",
+      "preferred": "primary"
+    },
+    "special_requirements": [
+      "설계 결정에 바로 쓰는 권고"
+    ]
+  },
+  "plan": {
+    "subtopics": [
+      "taxonomy",
+      "nondeterminism",
+      "small_suite",
+      "coding_benchmarks",
+      "guardrail_invariants"
+    ]
+  },
+  "progress": {
+    "phase_1": "completed",
+    "phase_2": "completed",
+    "phase_3": "in_progress",
+    "phase_4": "pending",
+    "phase_5": "pending",
+    "phase_6": "pending",
+    "phase_7": "pending"
+  },
+  "sources_count": 0,
+  "artifacts": {},
+  "errors": [],
+  "verification": {
+    "passed": false,
+    "signature": null,
+    "verified_count": 3,
+    "unresolved_count": 100,
+    "refuted_count": 0,
+    "unresolved_ratio": 0.9709,
+    "blocked": "process_violation",
+    "checked_at": "2026-11-11T06:40:06.717745+00:00",
+    "checker": "validate_ledger.py"
+  }
+}

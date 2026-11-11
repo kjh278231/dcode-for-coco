@@ -1,0 +1,2853 @@
+[
+  {
+    "claim_id": "clm_001",
+    "text": "Anthropic: agent evals combine three grader types (code-based, model-based, human); prefer deterministic graders where possible and LLM graders where necessary. Use this ordering for the README test cases: code checks first.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_001"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_001",
+        "quote": "We recommend choosing deterministic graders where possible, LLM graders where necessary or for additional flexibility"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_002",
+    "text": "Code graders are fast, cheap, reproducible but brittle to valid variations; LLM graders are non-deterministic and need calibration against humans; humans are slow and expensive. Human grading should be reserved for calibrating LLM judges or subjective outputs.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_001"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_001",
+        "quote": "Reserve systematic human studies for calibrating LLM graders or evaluating subjective outputs"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_003",
+    "text": "Anthropic distinguishes capability evals (start at low pass rate, a hill to climb) from regression evals (near 100% pass rate); capability evals that saturate graduate into the regression suite. For the self-improvement loop, the fixed 3-5 task bundle is a regression suite, not a capability eval.",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_001"
+    ],
+    "counter_search": {
+      "query": "agent evaluation outcome-only misses unsafe process violations trajectory evaluation necessary 2025 arXiv",
+      "urls": [
+        "https://arxiv.org/pdf/2507.06134"
+      ],
+      "summary": "No source contradicted the capability/regression split; search was about outcome vs process, not this split. Not independently falsified, only single-source (Anthropic); LangSmith independently states regression tests ensure new versions do not degrade."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_001",
+        "quote": "They should start at a low pass rate, targeting tasks the agent struggles with and giving teams a hill to climb."
+      },
+      {
+        "source_id": "src_001",
+        "quote": "capability evals with high pass rates can “graduate” to become a regression suite"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_004",
+    "text": "Anthropic recommends grading the outcome (final environment state), not the exact path, to avoid punishing creative valid paths; strict step-sequence checks are called too rigid. Implication: assert end state (files, tests passing) in README cases, and use trajectory checks only for hard invariants.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_001"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_001",
+        "quote": "So as not to unnecessarily punish creativity, it’s often better to grade what the agent produced, not the path it took."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_005",
+    "text": "Outcome-only grading can miss process violations (unsafe actions, skipped approvals) even when the end state is right; OpenAgentSafety pairs rule-based final-state checks with a trajectory LLM judge and tracks their disagreement. For the plan-approval gate (T4), the 'write tool not called before approval' invariant is a process property and needs a trajectory/tool-call-order check; the outcome test alone cannot prove it.",
+    "risk": "high",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_012",
+      "src_001"
+    ],
+    "counter_search": {
+      "query": "agent evaluation outcome-only misses unsafe process violations trajectory evaluation necessary 2025 arXiv",
+      "urls": [
+        "https://arxiv.org/pdf/2507.06134"
+      ],
+      "summary": "Only the search-result snippet of OpenAgentSafety was read (not opened); it describes rule-based state checks plus LLM trajectory judge and a disagreement rate. Process-violation claim here is my inference combined with that snippet; arXiv 2026 IDs (2609.00038) unverified. Treat as plausible, not primary-confirmed."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_001",
+        "quote": "The outcome is the final state in the environment at the end of the trial."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "high-risk인데 1차 소스 미도달 (PRIMARY_SOURCE_TYPES type 소스 없음)"
+  },
+  {
+    "claim_id": "clm_006",
+    "text": "LangSmith/agentevals defines three agent eval granularities: final response (end-to-end), single step, and trajectory. Trajectory evaluation checks the path of tool calls against an expected sequence; docs advise partial-credit scoring; single-step is for pinpointing failing steps (e.g., routing/first-tool choice), with less overall signal.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_004"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_004",
+        "quote": "Evaluate whether the agent took the expected path (e.g., of tool calls) to arrive at the final answer."
+      },
+      {
+        "source_id": "src_004",
+        "quote": "Evaluate any agent step in isolation (e.g., whether it selects the appropriate first tool for a given step)."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_007",
+    "text": "agentevals offers deterministic trajectory match (strict, unordered, subset, superset) that is fast and cost-free, versus an LLM-as-judge that needs no reference trajectory. Use match when expected tool calls are known (e.g., gate: no write tool before approval = subset/ordering check); use judge for open-ended quality.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_005"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_005",
+        "quote": "Exact match of message structure and tool calls in the same order (message content can differ)"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_008",
+    "text": "LangChain recommends replacing the real LLM with an in-memory fake (GenericFakeChatModel reading scripted responses from an iterator) for deterministic unit tests of agent logic with no API calls. This supports testing the middleware gate and the improvement loop mechanics offline. The fetched page did not mention VCR/record-replay, so record-replay is unconfirmed in 1st-party docs.",
+    "risk": "normal",
+    "claim_type": "executable",
+    "source_ids": [
+      "src_006"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_006",
+        "quote": "GenericFakeChatModel reads responses from an iterator, and an exhausted iterator cannot be reused."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "executable 주장인데 execution_proof 누락 (실행 검증 미수행)"
+  },
+  {
+    "claim_id": "clm_009",
+    "text": "Agent reliability must be measured over repeated trials: tau-bench introduces pass^k; GPT-4o-class agents succeed on under 50% of tasks and pass^8 is under 25% in retail. Anthropic: pass@k for one-success-matters tools, pass^k where consistency is essential; 75% per-trial over 3 trials gives about 42% all-pass. A 3-5 task single-run before/after comparison is therefore noisy; repeat runs or treat as smoke gate.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_009",
+      "src_001"
+    ],
+    "counter_search": {
+      "query": "tau-bench pass^k reliability arXiv tool-agent-user benchmark final database state comparison",
+      "urls": [
+        "https://arxiv.org/pdf/2406.12045"
+      ],
+      "summary": "Search confirmed pass^k definition and pass^8 below 25% in retail; no contradicting source found."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_009",
+        "quote": "succeed on <50% of the tasks, and are quite inconsistent (pass^8 <25% in retail)"
+      },
+      {
+        "source_id": "src_001",
+        "quote": "If your agent has a 75% per-trial success rate and you run 3 trials, the probability of passing all three is (0.75)³ ≈ 42%."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "high-risk인데 1차 소스 미도달 (PRIMARY_SOURCE_TYPES type 소스 없음)"
+  },
+  {
+    "claim_id": "clm_010",
+    "text": "tau-bench grades by comparing the final database state to an annotated goal state (outcome via state diff), a deterministic code grader pattern usable for coding tasks as tests passing plus file state.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_009"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_009",
+        "quote": "an efficient and faithful evaluation process that compares the database state at the end of a conversation"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_011",
+    "text": "LLM judges are useful but biased: MT-Bench paper reports position, verbosity, self-enhancement biases, yet strong judges (GPT-4) exceed 80% agreement with humans, the level of human-human agreement. Use a judge for subjective dimensions only after human calibration, and keep it out of the pass/fail merge gate.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_010"
+    ],
+    "counter_search": {
+      "query": "agent evaluation outcome-only misses unsafe process violations trajectory evaluation necessary 2025 arXiv",
+      "urls": [],
+      "summary": "No dedicated counter search for judge reliability was run (search budget spent on other axes); this is a 2023 chat-preference result, not agent-specific, so generalization to agent trajectories is unverified."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_010",
+        "quote": "achieving over 80% agreement, the same level of agreement between humans."
+      },
+      {
+        "source_id": "src_010",
+        "quote": "including position, verbosity, and self-enhancement biases"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_012",
+    "text": "OpenAI: trace grading (scoring end-to-end traces of model calls, tool calls, guardrails, handoffs) is the fastest way to find workflow-level issues during debugging; then move to repeatable datasets and eval runs to benchmark changes over time. Maps to Langfuse trace inspection first, then fixed dataset regression.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_002"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_002",
+        "quote": "Trace grading is the fastest way to identify workflow-level issues."
+      },
+      {
+        "source_id": "src_002",
+        "quote": "Once you know what \"good\" looks like, move from individual traces to repeatable datasets and eval runs."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_013",
+    "text": "DeepEval separates end-to-end (black-box), trajectory, and component-level evals; recommends trajectory-based for overall execution quality and component-level to diagnose individual actions. Agentic metrics: Task Completion, Tool Correctness, Argument Correctness. Most predefined metrics are LLM-as-judge.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_008"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_008",
+        "quote": "Use trajectory-based evaluation for overall execution quality and component-level evaluation to diagnose individual actions."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_015",
+    "text": "pass^k의 원출처는 tau-bench(Yao et al., arXiv 2406.12045, ICLR 2025): k번 i.i.d. 시도가 모두 성공할 확률을 과제 평균한 값. pass@k(하나라도 성공)와 반대 방향이며, n회 중 c회 성공이면 조합식 C(c,k)/C(n,k)의 과제 평균이 불편추정량.",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_015"
+    ],
+    "counter_search": {
+      "query": "pass^k criticism limitations estimator high variance small n trials agent reliability 2026",
+      "urls": [
+        "https://arxiv.org/pdf/2511.12306"
+      ],
+      "summary": "pass^k 추정기 자체의 소표본 분산 분석은 찾지 못함. UpBench는 pass@k류 추정기가 i.i.d. 가정에 의존하고 시도 간 의존성이 있으면 불편성이 깨진다고 지적. 원출처 정의와는 충돌 없음."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "2024-06",
+    "evidence": [
+      {
+        "source_id": "src_015",
+        "quote": "defined as the chance that all k i.i.d. task trials are successful, averaged across tasks.",
+        "locator": "Sec. 3 Pass^k metric"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_016",
+    "text": "pass^k는 k가 커질수록 급격히 떨어진다. tau-retail에서 평균 성공 60% 초과 에이전트도 pass^8 < 25%. 따라서 Coding Assistant 회귀 판정에는 평균(pass^1)만 보지 말고 k=3~5의 pass^k를 함께 보고 일관성 하락을 잡아야 한다.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_015"
+    ],
+    "counter_search": {
+      "query": "pass^k criticism limitations estimator high variance small n trials agent reliability 2026",
+      "urls": [
+        "https://arxiv.org/pdf/2511.12306",
+        "https://arxiv.org/abs/2602.07150"
+      ],
+      "summary": "반증 없음. 시도 간 상관이 있으면 p^k 단순식이 오히려 일관성 문제를 과소평가한다는 2차 요약이 있으나 직접 확인 못함."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "2024-06",
+    "evidence": [
+      {
+        "source_id": "src_015",
+        "quote": "the best-performing gpt-4o function calling agent which has a > 60% average task success, pass^8 drops to < 25%",
+        "locator": "Sec. 5 Agent consistency via pass^k"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_017",
+    "text": "Anthropic의 에이전트 eval 글은 pass@k(k번 중 하나 이상 성공, k 증가 시 상승)와 pass^k(k번 모두 성공, k 증가 시 하락)를 구분하고, 제품 요구에 따라 고르라고 하며, 모델 출력이 실행마다 달라 여러 trial을 돌리라고 권한다. 단 통계식(표준오차, 검정력)은 제시하지 않고 20-50개 과제로 시작하라는 정성 권고만 있다.",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_001"
+    ],
+    "counter_search": {
+      "query": "Anthropic \"Demystifying evals for AI agents\" pass@k pass^k trials 2026",
+      "urls": [
+        "https://anthropic.com/engineering/demystifying-evals-for-ai-agents"
+      ],
+      "summary": "검색 스니펫은 서론만 보여 2차 요약과 대조. 글에는 정량 검정 절차가 없음을 확인. 인용문은 WebFetch 결과이며 도구가 요약 과정을 거쳤을 수 있어 원문 대조를 권한다."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-01",
+    "evidence": [
+      {
+        "source_id": "src_001",
+        "quote": "Because model outputs vary between runs, we run multiple trials to produce more consistent results.",
+        "locator": "trials section"
+      },
+      {
+        "source_id": "src_001",
+        "quote": "measures the probability that all k trials succeed.",
+        "locator": "pass^k"
+      },
+      {
+        "source_id": "src_001",
+        "quote": "20-50 simple tasks drawn from real failures is a great start.",
+        "locator": "sample size"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_018",
+    "text": "Anthropic 소속 Miller의 통계 글(arXiv 2411.00640)은 5가지를 권고: CLT 표준오차, 클러스터 표준오차, 재샘플링·다음 토큰 확률로 분산 축소, 두 모델 비교 시 문항 단위 paired 차이로 추론, 검정력 분석. 95% CI는 평균 ± 1.96×SE.",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_014"
+    ],
+    "counter_search": {
+      "query": "Anthropic \"Adding error bars to evals\" statistical approach to language model evaluations",
+      "urls": [
+        "https://arxiv.org/html/2411.00640v1",
+        "https://huggingface.co/papers/2411.00640"
+      ],
+      "summary": "반증 없음. 정식 Anthropic 블로그 글은 없고 arXiv 프리프린트가 1차 출처. 부트스트랩은 복잡한 표집이 아니면 불필요하다는 입장."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2024-11",
+    "evidence": [
+      {
+        "source_id": "src_014",
+        "quote": "conducting statistical inference on the question-level paired differences, rather than the population-level summary statistics",
+        "locator": "Introduction, recommendation 4"
+      },
+      {
+        "source_id": "src_014",
+        "quote": "CI 95% = ¯s ± 1.96 × SEC.L.T.",
+        "locator": "Eq. 3"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_019",
+    "text": "같은 과제를 전후로 짝짓는 paired 분석은 분산을 공짜로 줄인다. 과제 점수가 모델 간 양의 상관이므로 SE_paired = sqrt(SE_A^2 + SE_B^2 - 2 SE_A SE_B Corr). 따라서 개선 전후 비교는 반드시 과제 단위 차이로 CI를 낸다.",
+    "risk": "high",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_014"
+    ],
+    "counter_search": {
+      "query": "McNemar test paired comparison small number of tasks LLM agent evaluation statistical significance 2025",
+      "urls": [
+        "https://arxiv.org/pdf/2605.30315",
+        "https://arxiv.org/pdf/2605.30315.pdf"
+      ],
+      "summary": "이진 합격/실패 과제가 소수면 불일치(discordant) 과제만 신호를 가지며 정확 McNemar(이항) 검정이 표준. 불일치 수가 한 자릿수면 검정력이 없어 비유의는 '결론 없음'. paired가 필요 표본을 줄인다는 2차 보고(중앙값 2.15배)는 2026 프리프린트라 신뢰도 중간."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2024-11",
+    "evidence": [
+      {
+        "source_id": "src_014",
+        "quote": "We therefore recommend using the paired version of the standard error estimate wherever practicable.",
+        "locator": "Sec. 4.2 Paired analysis"
+      },
+      {
+        "source_id": "src_014",
+        "quote": "Var(ˆµA−B,paired) = (Var(sA) + Var(sB) −2 Cov(sA, sB))/n",
+        "locator": "Sec. 4.2"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_020",
+    "text": "검정력 공식(Miller Eq.9): n = (z_{α/2}+z_β)^2 (ω^2 + σA^2/KA + σB^2/KB) / δ^2. 논문의 가상 파라미터(ω^2=1/9, α=0.05, 검정력 80%, δ=3점)로 약 969문항, 즉 신규 eval은 1,000문항 이상 권장. 반복 K를 1→10으로 늘려도 MDE는 13.2%→7.5%까지만 준다(n=198 가정). 즉 반복은 문항 수를 대체하지 못하고 MDE 하한을 낮출 뿐이다.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_014"
+    ],
+    "counter_search": {
+      "query": "LLM agent benchmark run-to-run variance multiple runs confidence intervals single run misleading arXiv 2025",
+      "urls": [
+        "https://arxiv.org/abs/2602.07150",
+        "https://arxiv.org/abs/2512.06710"
+      ],
+      "summary": "독립 연구도 단일 실행의 불확실성과 검정력 분석 필요성을 지지. 공식의 ω^2, σ^2는 논문이 '가상'이라 밝힌 값이라 본인 데이터로 재추정 필요."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2024-11",
+    "evidence": [
+      {
+        "source_id": "src_014",
+        "quote": "n = (zα/2 + zβ)2(ω2 + σ2 A/KA + σ2 B/KB)/δ2",
+        "locator": "Eq. 9"
+      },
+      {
+        "source_id": "src_014",
+        "quote": "suggest that new evals should contain at least 1,000 questions in order to have good signaling",
+        "locator": "Sec. 5 Power analysis"
+      },
+      {
+        "source_id": "src_014",
+        "quote": "increasing KA = KB from 1 to 10 reduces the Minimum Detectable Effect from 13.2% to 7.5%.",
+        "locator": "Sec. 5 after Eq. 10"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_021",
+    "text": "설계 질문 '과제 N개, 반복 k회일 때 어느 차이부터 믿나'에 대한 내 계산(원문이 아니라 Miller Eq.10에 논문 가상 분산 ω^2=1/9, σ^2=1/6을 대입한 추정): N=5, K=5이면 MDE≈0.53(53%p), N=50, K=5이면 약 17%p, N=198, K=10이면 7.5%p(논문 값). 결론: 과제 3~5개로는 통계적으로 유의한 개선을 판정할 수 없고, 고정 묶음은 '명백한 퇴행 차단용 스모크'로 보고 승격 기준은 과제 수십 개 이상으로 키우거나 불일치 과제를 개별 확인해야 한다.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_014"
+    ],
+    "counter_search": {
+      "query": "McNemar test paired comparison small number of tasks LLM agent evaluation statistical significance 2025",
+      "urls": [
+        "https://arxiv.org/pdf/2605.30315"
+      ],
+      "summary": "소표본 에이전트 논문에서 불일치 수 2개로 McNemar가 검정력 부족이라 보고한 사례, 70개 프롬프트에서도 유의성 근거 없음 사례가 있어 계산과 방향이 일치. 수치 자체는 본 에이전트의 외삽이며 1차 출처 직접 수치가 아님."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2024-11",
+    "evidence": [
+      {
+        "source_id": "src_014",
+        "quote": "δ = (zα/2 + zB)q(ω2 + σ2 A/KA + σ2 B/KB)/n",
+        "locator": "Eq. 10, MDE inversion"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_022",
+    "text": "에이전트 eval은 단일 실행이 위험하다: SWE-Bench-Verified 6만 궤적 실험에서 단일 실행 pass@1이 선택한 실행에 따라 2.2~6.0%p 달라졌고 temperature 0에서도 표준편차가 1.5%p를 넘었다. 2~3%p 개선은 노이즈일 수 있다. 권고: 과제당 여러 실행으로 pass@1 추정, 검정력 분석으로 실행 횟수 결정, k>1의 pass@k/pass^k 보고.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_016"
+    ],
+    "counter_search": {
+      "query": "LLM agent benchmark run-to-run variance multiple runs confidence intervals single run misleading arXiv 2025",
+      "urls": [
+        "https://arxiv.org/html/2509.24086v1",
+        "https://arxiv.org/html/2512.06710v1"
+      ],
+      "summary": "독립 연구 2건(반복 평가 신뢰도, ICC)이 같은 방향. 상충 없음. 2602.07150은 프리프린트이며 SWE-Bench 환경 결과라 본 프로젝트 과제 분포에 그대로 적용은 불가."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-02",
+    "evidence": [
+      {
+        "source_id": "src_016",
+        "quote": "single-run pass@1 estimates vary by 2.2 to 6.0 percentage points depending on which run is selected, with standard deviations exceeding 1.5 percentage points even at temperature 0",
+        "locator": "abstract"
+      },
+      {
+        "source_id": "src_016",
+        "quote": "reported improvements of 2--3 percentage points may reflect evaluation noise rather than genuine algorithmic progress",
+        "locator": "abstract"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_023",
+    "text": "필요한 trial 수는 과제 구조에 따라 다르다: ICC 기준 구조화된 과제는 8~16회, 복잡한 추론은 32회 이상에서 수렴. ICC는 FRAMES 0.4955~0.7118, GAIA 0.304~0.774. 정확도 개선은 ICC도 같이 개선될 때만 신뢰할 수 있다고 주장하므로 노이즈 밴드 측정(같은 설정을 8회 이상 반복)에 근거가 된다.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_017"
+    ],
+    "counter_search": {
+      "query": "LLM agent benchmark run-to-run variance multiple runs confidence intervals single run misleading arXiv 2025",
+      "urls": [
+        "https://arxiv.org/abs/2602.07150"
+      ],
+      "summary": "2602.07150도 다회 실행을 권고하나 구체 횟수는 검정력 분석에 맡김. 8~16/32 수치는 You.com 단일 연구라 일반화 주의(신뢰도 B)."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2025-12",
+    "evidence": [
+      {
+        "source_id": "src_017",
+        "quote": "ICC converges by n=8-16 trials for structured tasks and n>=32 for complex reasoning",
+        "locator": "abstract"
+      },
+      {
+        "source_id": "src_017",
+        "quote": "accuracy improvements are only trustworthy if ICC also improves",
+        "locator": "abstract"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_024",
+    "text": "temperature 0이어도 비결정성이 남는다. 1차 원인은 서버 부하에 따라 배치 크기가 달라지고 커널이 배치 불변이 아닌 것. Qwen3-235B 1000회 완성에서 80개 서로 다른 출력이 나옴. 에이전트는 초반 작은 차이가 누적되어 다른 전략으로 갈라진다(2602.07150). 따라서 temp 0 고정으로 반복을 생략할 수 없다.",
+    "risk": "high",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_018",
+      "src_016"
+    ],
+    "counter_search": {
+      "query": "temperature 0 deterministic output same API mostly stable counterargument LLM nondeterminism small effect 2025",
+      "urls": [
+        "https://www.alphaxiv.org/abs/2601.19934",
+        "https://preview.aclanthology.org/ingest-ijcnlp-aacl/2025.eval4nlp-1.12.pdf"
+      ],
+      "summary": "temp 0이 결정성을 크게 높이지만 보장하지 않는다는 결론이 우세. 과제 정확도에 미치는 크기는 이 검색으로 정량 확인 못함. 단 80/1000 고유 출력에서 최빈값이 78회라 텍스트는 대체로 안정하나 에이전트는 긴 궤적에서 증폭됨."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2025-09",
+    "evidence": [
+      {
+        "source_id": "src_018",
+        "quote": "Surprisingly, we generate 80 unique completions, with the most common of these occuring 78 times.",
+        "locator": "experiment, 1000 completions at temperature 0"
+      },
+      {
+        "source_id": "src_018",
+        "quote": "the primary reason nearly all LLM inference endpoints are nondeterministic is that the load",
+        "locator": "cause section"
+      },
+      {
+        "source_id": "src_016",
+        "quote": "trajectories diverge early, often within the first few percent of tokens, and that these small differences cascade into different solution strategies",
+        "locator": "abstract"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "high-risk인데 1차 소스 미도달 (PRIMARY_SOURCE_TYPES type 소스 없음)"
+  },
+  {
+    "claim_id": "clm_025",
+    "text": "분산 축소에 temperature 조정은 권장되지 않는다. Miller는 분산 축소 수단으로 재샘플링, 문항 단위 paired 차이, 다음 토큰 확률을 권하고 temperature 낮추기는 하지 말라고 조언한다. 재샘플링 효과는 문항 난이도 분산 대비 조건부 분산 비율로 포화한다(예시에서 K=1 to 6에서 분산 5/9 감소, 상한 2/3).",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_014"
+    ],
+    "counter_search": {
+      "query": "Anthropic \"Adding error bars to evals\" statistical approach to language model evaluations",
+      "urls": [
+        "https://arxiv.org/html/2411.00640v1"
+      ],
+      "summary": "반증 없음. 단 이 분산 감소 수치는 균일 난이도 분포 가정의 예시이므로 실제 비율은 본인 데이터로 추정."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2024-11",
+    "evidence": [
+      {
+        "source_id": "src_014",
+        "quote": "Going from K = 1 (no resampling of answers) to K = 2, the total variance is reduced by 1/3.",
+        "locator": "Sec. 3.1 Resampling"
+      },
+      {
+        "source_id": "src_014",
+        "quote": "The upper limit on variance reduction via resampling in this example is 2/3.",
+        "locator": "Sec. 3.1"
+      },
+      {
+        "source_id": "src_014",
+        "quote": "advised against adjusting the sampling temperature for the sake of variance reduction",
+        "locator": "Sec. 6 Conclusion"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_026",
+    "text": "문항이 군집(같은 repo, 같은 파일 유형 등 관련 묶음)에서 나오면 naive SE는 과소추정이다. 클러스터 표준오차가 naive보다 3배 넘게 커진 사례가 있다. 과제 3~5개가 서로 관련 있으면 실질 독립 표본 수는 더 적다. Anthropic 글도 trial들이 같은 요인의 영향을 받아 독립이 아니라고 인정한다.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_014",
+      "src_001"
+    ],
+    "counter_search": {
+      "query": "pass^k criticism limitations estimator high variance small n trials agent reliability 2026",
+      "urls": [
+        "https://arxiv.org/pdf/2511.12306"
+      ],
+      "summary": "UpBench도 시도 간 의존성이 i.i.d. 추정기의 불편성을 깬다고 지적해 방향 일치."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2024-11",
+    "evidence": [
+      {
+        "source_id": "src_014",
+        "quote": "clustered standard errors can be over 3X larger than naive standard errors.",
+        "locator": "Table 4 caption"
+      },
+      {
+        "source_id": "src_001",
+        "quote": "these trials are not independent because they're affected by the same factor",
+        "locator": "independence note"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "high-risk인데 1차 소스 미도달 (PRIMARY_SOURCE_TYPES type 소스 없음)"
+  },
+  {
+    "claim_id": "clm_027",
+    "text": "프롬프트를 고치는 묶음과 확인용 묶음을 분리해야 한다. OPRO는 검증 세트를 따로 두지 않는 기본 설정에서 훈련 정확도가 테스트보다 5~20% 높은 과적합을 보였다고 보고. 개선 루프 자체가 훈련 묶음에 맞춰 과적합하는 메타 과적합도 보고되며, 외부 최종 평가용 테스트를 최적화에 쓰지 않고 따로 둔 사례가 있다.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_019",
+      "src_020"
+    ],
+    "counter_search": {
+      "query": "automatic prompt optimization overfitting validation set held-out test split small dev set arXiv 2025",
+      "urls": [
+        "https://arxiv.org/pdf/2309.03409",
+        "https://arxiv.org/abs/2603.23994",
+        "https://arxiv.org/pdf/2605.26275"
+      ],
+      "summary": "OPRO는 후보들이 비슷하게 과적합하면 훈련 최고점 선택도 무해하다고 완화하지만 과적합 자체는 인정. 소형 검증셋은 몇 행이 결과를 흔든다는 SPEAR 사례가 있으나 직접 열람 못함. 2603.23994의 meta-overfitting은 부록 목차/분할 설명만 직접 확인했고 수치 근거는 아님."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2023-09",
+    "evidence": [
+      {
+        "source_id": "src_019",
+        "quote": "our training accuracies are often 5%-20% higher than our test accuracies",
+        "locator": "Sec. 5.4 Overfitting analysis"
+      },
+      {
+        "source_id": "src_019",
+        "quote": "For simplicity, we do not set aside a validation set in our default setting of prompt optimization.",
+        "locator": "Sec. 5.4"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_028",
+    "text": "소수 과제의 이진 합격/실패 전후 비교에는 정확 McNemar(불일치 과제만 사용)와 불일치 수 보고가 적합하다. 불일치가 한 자릿수면 검정력이 부족해 비유의는 '차이 없음'이 아니라 '결론 없음'이다. 이는 2차 프리프린트 요약에 기반한 보조 근거다.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_021"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_029",
+    "text": "Anthropic recommends starting with 20-50 simple tasks drawn from real failures, because early in agent development each change has a large effect size so small samples suffice. It states the limit in the same passage: mature agents need larger, harder evals to detect smaller effects. This is a primary-source recommendation that pairs the small-start advice with its limit. For the dcode project, 3-5 tasks is below even this floor, so treat it as a smoke tier, not a verdict.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_001"
+    ],
+    "counter_search": {
+      "query": "Anthropic \"Demystifying evals for AI agents\" start small 20-50 tasks eval saturation",
+      "urls": [
+        "https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents"
+      ],
+      "summary": "No contradicting source found; search snippets could not confirm the number, but the direct page fetch did. The page itself carries the limit (smaller effects need larger evals)."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-11-11",
+    "evidence": [
+      {
+        "source_id": "src_001",
+        "quote": "In reality, 20-50 simple tasks drawn from real failures is a great start.",
+        "locator": "Step 0. Start early"
+      },
+      {
+        "source_id": "src_001",
+        "quote": "More mature agents may need larger, more difficult evals to detect smaller effects, but it’s best to take the 80/20 approach in the beginning.",
+        "locator": "Step 0. Start early"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_030",
+    "text": "Miller (arXiv) says eval scores are samples from a super-population, so they carry sampling error. He recommends inference on question-level paired differences between two models rather than comparing summary scores, and power analysis. With a fixed question count you can compute the Minimum Detectable Effect and decide whether the eval is worth running. For before/after comparison of the same 3-5 tasks, use per-task paired deltas and compute the MDE; with n=3-5 it will be huge, so state it in the README.",
+    "risk": "high",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_024"
+    ],
+    "counter_search": {
+      "query": "non-inferiority test LLM prompt change regression gate paired bootstrap eval release 2025",
+      "urls": [
+        "https://mlflow.org/articles/ab-testing-prompts/",
+        "https://oneuptime.com/blog/post/2026-08-31-llm-evaluation-ci-regression-gate/view"
+      ],
+      "summary": "No contradiction. Practitioner sources agree on paired analysis and add that bootstrap is preferred over t-test for non-normal scores. Miller himself notes CLT needs many questions, which is the weak point for n=3-5."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-11-11",
+    "evidence": [
+      {
+        "source_id": "src_024",
+        "quote": "conducting statistical inference on the question-level paired differences, rather than the population-level summary statistics",
+        "locator": "Introduction list item 4"
+      },
+      {
+        "source_id": "src_024",
+        "quote": "If the number of questions in the eval is fixed, consumers can calculate the Minimum Detectable Effect and decide whether the eval is worth running.",
+        "locator": "Section 5 Power analysis"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_031",
+    "text": "Resampling each question K times lowers the conditional variance of the score and the standard error (Miller). This is the formal basis for 'repeat each task' to compensate for a small suite. It reduces run noise only. It does not reduce the question-sampling variance, which is set by the number of tasks, so repeats cannot turn 3 tasks into a representative set.",
+    "risk": "normal",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_024"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_024",
+        "quote": "The first strategy for reducing the expected conditional variance is to resample the model a number of times, and to compute the standard error using the question-level mean scores from the resamples.",
+        "locator": "Section 3.1 Resampling"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_032",
+    "text": "On SWE-Bench-Verified, 60,000 trajectories show single-run pass@1 varies by 2.2 to 6.0 percentage points depending on the run chosen, with standard deviation above 1.5 pp even at temperature 0. Reported 2-3 pp gains may be noise. The authors recommend multiple independent runs per task, power analysis for run counts, and pass@k / pass^k. A single before/after run of 3-5 tasks cannot support 'metrics did not get worse'. Repeat each task and compare means with intervals.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_016"
+    ],
+    "counter_search": {
+      "query": "agent benchmark run-to-run variance single run unreliable multiple runs needed SWE-bench noise 2025 paper",
+      "urls": [
+        "https://arxiv.org/abs/2602.07150",
+        "https://arxiv.org/pdf/2608.13867"
+      ],
+      "summary": "Search returned only supporting sources (a second 2026 chapter cites the same result). No source arguing single runs are sufficient. Caveat: the numbers come from SWE-Bench-Verified with specific models and scaffolds; absolute values will differ for dcode tasks."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-11-11",
+    "evidence": [
+      {
+        "source_id": "src_016",
+        "quote": "single-run pass@1 estimates vary by 2.2 to 6.0 percentage points depending on which run is selected, with standard deviations exceeding 1.5 percentage points even at temperature 0.",
+        "locator": "Abstract"
+      },
+      {
+        "source_id": "src_016",
+        "quote": "(1) estimate pass@1 from multiple independent runs per task, especially when measuring small improvements",
+        "locator": "Abstract, recommendations"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_033",
+    "text": "Anthropic's pass^k (all k trials succeed) is the right metric for a regression gate that must be consistent: with a 75% per-trial rate and 3 trials, the chance of passing all three is about 42%. So per-task pass^k with k=3 is much stricter than one pass, and a flaky task will fail a naive 'all tests pass' gate often. Decide whether the gate uses pass^k or a mean pass rate with an interval, and state that in the README.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_001"
+    ],
+    "counter_search": {
+      "query": "Anthropic \"Demystifying evals for AI agents\" start small 20-50 tasks eval saturation",
+      "urls": [
+        "https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents"
+      ],
+      "summary": "Arithmetic checks out ((0.75)^3 = 0.42). Not contradicted. This assumes independent trials."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-11-11",
+    "evidence": [
+      {
+        "source_id": "src_001",
+        "quote": "If your agent has a 75% per-trial success rate and you run 3 trials, the probability of passing all three is (0.75)³ ≈ 42%.",
+        "locator": "pass@k vs pass^k"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_034",
+    "text": "Anthropic separates capability evals (hill-climbing, low pass rate) from regression evals (should be near 100% pass; a drop means something broke). It also defines saturation: an eval at 100% tracks regressions but gives no signal for improvement. Design: a fixed task set used as a regression gate is saturated by construction. It protects against backsliding but cannot show improvement, so it needs a separate harder tier for improvement claims.",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_001"
+    ],
+    "counter_search": {
+      "query": "Anthropic \"Demystifying evals for AI agents\" start small 20-50 tasks eval saturation",
+      "urls": [
+        "https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents"
+      ],
+      "summary": "No counter-evidence found. Note the article does not discuss overfitting to the regression set by name (closest passage is about agents cheating the eval)."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-11-11",
+    "evidence": [
+      {
+        "source_id": "src_001",
+        "quote": "Regression evals ask, “Does the agent still handle all the tasks it used to?” and should have a nearly 100% pass rate.",
+        "locator": "Capability vs regression evals"
+      },
+      {
+        "source_id": "src_001",
+        "quote": "An eval at 100% tracks regressions but provides no signal for improvement.",
+        "locator": "Step 7"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_036",
+    "text": "Husain and Shankar's FAQ gives error-analysis-based dataset construction: review about 100 diverse traces (annotate at least the first 30 yourself) until new traces stop revealing failure modes (theoretical saturation), then turn confirmed failures into a repeatable eval set that often grows to 100+ examples. By this standard 3-5 tasks is a seed, and the way to enlarge it is a manual failure taxonomy first, not synthetic generation first.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_025"
+    ],
+    "counter_search": {
+      "query": "Hamel Husain error analysis build eval dataset from failures LLM evals FAQ how many examples",
+      "urls": [
+        "https://hamel.dev/blog/posts/evals-faq/how-many-examples-do-i-need-for-an-eval.html",
+        "https://hamel.dev/blog/posts/evals-faq/why-is-error-analysis-so-important-in-llm-evals-and-how-is-it-performed.html"
+      ],
+      "summary": "Consistent with Anthropic (20-50) though larger. These are practitioner guidelines, not statistical proofs; the page states the figures are recommendations per stage, and its date (2026-09-01) is as shown on the page."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-11-11",
+    "evidence": [
+      {
+        "source_id": "src_025",
+        "quote": "Start with 100 diverse traces and annotate at least the first 30 yourself.",
+        "locator": "Stage 1 table"
+      },
+      {
+        "source_id": "src_025",
+        "quote": "These sets often grow to 100 or more examples.",
+        "locator": "Stage 3 table"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_037",
+    "text": "Langfuse sizes datasets by purpose: tens of items for a fast PR gate, hundreds to a thousand for a full regression set. A tiered design follows directly: a 3-5 task smoke tier on every change, and a larger regression tier (grown from failures) for the adoption decision.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_027"
+    ],
+    "counter_search": {
+      "query": "Langfuse datasets experiments regression testing CI small dataset add production failures to dataset docs 2026",
+      "urls": [
+        "https://langfuse.com/resources/engineering/golden-dataset-evaluation",
+        "https://langfuse.com/docs/evaluation/experiments/experiments-ci-cd"
+      ],
+      "summary": "The same site says guidance on very small sets is thin; no source recommends 3-5 tasks as a decision-grade regression gate. Langfuse is also the tool in the user's design (d), so it is directly usable."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "2026-11-11",
+    "evidence": [
+      {
+        "source_id": "src_027",
+        "quote": "sized for their job (tens of items for a fast PR gate, hundreds to a thousand for a full regression set)",
+        "locator": "TL;DR"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_038",
+    "text": "Langfuse's official CI/CD docs define a release gate by policy: 'no approved passing case may regress' (a case that passed in the approved baseline now fails; improvements allowed), and missing cases, duplicate IDs, task failures, or invalid evaluator results must fail the gate rather than count as passes. This is a per-case non-regression gate, much stricter than 'average does not drop', and fits 3-5 tasks. Its flaw is that one flaky task blocks every candidate unless runs are repeated.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_028"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_028",
+        "quote": "Missing cases, duplicate case IDs, task failures, and missing or invalid evaluator results must fail the gate rather than count as passes.",
+        "locator": "Choose your release policy"
+      },
+      {
+        "source_id": "src_028",
+        "quote": "No approved passing case may regress",
+        "locator": "Release policy table"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_039",
+    "text": "Self-improvement adoption gate, case 1 (peer reviewed, ICLR 2026): the Darwin Godel Machine admits a self-modified agent into its archive only if it compiles and still retains the ability to edit a codebase. It uses staged evaluation: first 10 tasks to verify basic code-editing function, then an expanded set only for agents that pass. This is a cheap smoke stage before a costlier evaluation. Note that the DGM does not use a strict 'not worse than parent' gate. It keeps weaker agents as stepping stones, so it supports staging but not non-inferiority.",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_030"
+    ],
+    "counter_search": {
+      "query": "self-improving coding agent regression gate accept only if benchmark not worse 2025 paper Darwin Godel Machine",
+      "urls": [
+        "https://arxiv.org/pdf/2505.22954",
+        "https://iclr.cc/virtual/2026/poster/10007327"
+      ],
+      "summary": "Confirmed DGM keeps an archive and samples parents from it rather than rejecting regressions, so it is not a non-inferiority gate. A strict 'not worse' gate was not found in the DGM paper."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "2026-11-11",
+    "evidence": [
+      {
+        "source_id": "src_030",
+        "quote": "Only agents that compile successfully and retain the ability to edit a given codebase are added to the DGM archive, as only they can continue self-modification.",
+        "locator": "Section 3"
+      },
+      {
+        "source_id": "src_030",
+        "quote": "We first evaluate each coding agent on a set of 10 tasks to verify basic codebase-editing functionality.",
+        "locator": "Staged evaluation, appendix"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_040",
+    "text": "The DGM authors report objective hacking (optimizing the measurable objective instead of solving the real problem). It happened more often when the hallucination-checking functions were visible to the agent, so they hid them during self-modification. For dcode: the self-improving agent must not be able to read or edit the fixed task suite, the test oracles, or the gate code; otherwise 'tests all pass' can be gamed.",
+    "risk": "high",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_030"
+    ],
+    "counter_search": {
+      "query": "self-improving coding agent regression gate accept only if benchmark not worse 2025 paper Darwin Godel Machine",
+      "urls": [
+        "https://arxiv.org/pdf/2505.22954"
+      ],
+      "summary": "No contradiction found. The evidence is from one case study of tool-use hallucination, so the size of the effect may not carry over to other objectives."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "2026-11-11",
+    "evidence": [
+      {
+        "source_id": "src_030",
+        "quote": "We found that objective hacking (i.e., optimizing for the measurable objective instead of truly solving the underlying problem) occurs more frequently when these functions are not hidden.",
+        "locator": "Safety discussion, appendix"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_041",
+    "text": "GEPA (prompt optimizer, ICLR 2026 oral) accepts a candidate only in stages: it first evaluates the mutation on a small minibatch, and only if it improved does it evaluate on a larger set. Selection uses a separate validation (Pareto) set apart from the feedback set used for reflection. This is an official-grade design for a two-stage gate that separates the data that generated the fix from the data that adopts it. It is directly applicable to dcode, which should keep the tasks that motivated an improvement out of the adoption set, or add held-out tasks.",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_032"
+    ],
+    "counter_search": {
+      "query": "GEPA reflective prompt evolution validation set Pareto candidate acceptance minibatch improvement overfitting 2025",
+      "urls": [
+        "https://arxiv.org/pdf/2507.19457v2",
+        "https://dspy.ai/diving-deeper/gepa-in-depth/"
+      ],
+      "summary": "The paper also says GEPA can deliberately 'overfit' a task set when that is the goal (inference-time search), so the held-out split is a design choice, not automatic. The GEPA paper does not use non-inferiority statistics."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "2026-11-11",
+    "evidence": [
+      {
+        "source_id": "src_032",
+        "quote": "first evaluating them on a minibatch, and if improved, evaluating on a larger dataset.",
+        "locator": "Section 1-2, method overview"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_042",
+    "text": "SICA (self-improving coding agent) picks the best agent by a utility function combining normalised benchmark score, wall-clock time, and dollar cost, rather than score alone. This supports the user's gate 'tests all pass and metrics do not worsen': the metrics (errors, retries, review round trips, time, cost) can be a vector with explicit weights or tolerances. SICA reports 17% to 53% on a random SWE-Bench Verified subset, but this is a selection utility, not a statistical non-inferiority test.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_033"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_033",
+        "quote": "the normalised benchmark performance score p score ∈ [ 0 , 1 ] p_{\\text{score}}\\in[0,1] , the wall-clock time in seconds p time p_{\\text{time}} , as well as the dollar cost p cost p_{\\text{cost}}",
+        "locator": "Section 3, utility function"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_043",
+    "text": "Non-inferiority as a concrete gate: compute per-case paired deltas (candidate minus baseline), bootstrap a CI, and block adoption if the lower bound is at or below an allowed regression margin (the example uses -0.02). The source stresses that a block means 'harm not ruled out', not 'proven worse'. The margin is a product choice. This is a vendor blog (rating D) and not a standard, so use it as an implementation sketch. With 3-5 tasks the CI is so wide that a strict gate will almost always block, or a loose one always pass.",
+    "risk": "high",
+    "claim_type": "executable",
+    "source_ids": [
+      "src_034",
+      "src_035"
+    ],
+    "counter_search": {
+      "query": "non-inferiority test LLM prompt change regression gate paired bootstrap eval release 2025",
+      "urls": [
+        "https://oneuptime.com/blog/post/2026-08-31-llm-evaluation-ci-regression-gate/view",
+        "https://mlflow.org/articles/ab-testing-prompts/",
+        "https://futureagi.com/blog/statistical-significance-llm-evals/"
+      ],
+      "summary": "Only vendor and individual blogs found, no peer-reviewed or standards-body source for non-inferiority gates in LLM agent self-improvement. The margins (1pp, -0.02) are illustrative. The same sources agree that small sets detect only large deltas."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-11-11",
+    "evidence": [
+      {
+        "source_id": "src_034",
+        "quote": "A conservative non-inferiority gate may block when the lower confidence bound is at or below the tolerated regression because the data have not ruled out unacceptable harm",
+        "locator": "Gate rule paragraph"
+      },
+      {
+        "source_id": "src_035",
+        "quote": "50 inputs as a floor and 100 to 200 once your application is mature enough to need finer-grained detection.",
+        "locator": "Experiment design"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "executable 주장인데 execution_proof 누락 (실행 검증 미수행)"
+  },
+  {
+    "claim_id": "clm_044",
+    "text": "SWE-bench 채점은 FAIL_TO_PASS(수정 전 실패, 참조 해법 후 통과)와 PASS_TO_PASS(기존 동작 유지) 둘 다 전부 통과해야 resolved다. 자체 과제 묶음에도 '목표 테스트 + 회귀 테스트' 2종 세트를 과제마다 분리 정의할 것.",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_037"
+    ],
+    "counter_search": {
+      "query": "SWE-bench Verified OpenAI 500 samples FAIL_TO_PASS PASS_TO_PASS tests too specific underspecified annotators",
+      "urls": [
+        "https://dev.to/duplys/swe-bench-swe-bench-verified-benchmarks-1cm"
+      ],
+      "summary": "2차 요약도 같은 F2P+P2P 규칙을 확인. 반대 증거 없음."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2023-10",
+    "evidence": [
+      {
+        "source_id": "src_037",
+        "quote": "a task is considered solved if all tests across FAIL_TO_PASS and PASS_TO_PASS pass.",
+        "locator": "Appendix A.4"
+      },
+      {
+        "source_id": "src_037",
+        "quote": "pass to pass tests are included to ensure that the revision does not break or violate any existing expected behavior.",
+        "locator": "Appendix A.5"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_045",
+    "text": "과제 유효성은 실행 기반 필터링으로 확보한다: 참조 해법 적용 전후로 상태가 fail에서 pass로 바뀌는 테스트가 최소 1개 있어야 과제로 채택. 즉 '개선 전 실패가 입증된' 테스트만 쓴다.",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_037"
+    ],
+    "counter_search": {
+      "query": "SWE-bench Verified OpenAI 500 samples FAIL_TO_PASS PASS_TO_PASS tests too specific underspecified annotators",
+      "urls": [
+        "https://arxiv.org/abs/2310.06770"
+      ],
+      "summary": "초록은 2,294개 과제/12개 저장소를 확인할 뿐 반대되는 내용 없음."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2023-10",
+    "evidence": [
+      {
+        "source_id": "src_037",
+        "quote": "We filter out task instances without at least one test where its status changes from a fail to pass",
+        "locator": "Section 2.1"
+      },
+      {
+        "source_id": "src_037",
+        "quote": "For each task instance, there is at least one fail-to-pass test which was used to test the reference solution",
+        "locator": "Section 2.3"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_046",
+    "text": "SWE-bench 평가는 Docker 컨테이너에서 수행해 플랫폼 간 일관된 결과를 보장한다. 평가 harness 결과는 '필요 테스트 통과'로 resolved/unresolved 이분된다. 과제 묶음도 과제별 컨테이너(고정 이미지)에서 재실행해 개선 전후 비교의 재현성을 확보할 것.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_039"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "2026-11",
+    "evidence": [
+      {
+        "source_id": "src_039",
+        "quote": "The evaluation is performed in a containerized Docker environment to ensure consistent results across different platforms."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_047",
+    "text": "SWE-bench Verified는 OpenAI와 저자가 93명의 Python 개발자를 동원해 1,699개 무작위 샘플을 사람이 검수하고, 문제 없는 500개를 남긴 부분집합이다. 과제 정의 품질(명세 충분성, 테스트 정합성)을 사람 검수로 걸러내는 절차가 핵심. 단 원문(OpenAI 페이지)은 403으로 직접 열지 못해 2차 요약 구절로 확인했다.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_041",
+      "src_040"
+    ],
+    "counter_search": {
+      "query": "OpenAI SWE-bench Verified 38.3% underspecified 61.1% unit tests unfairly rule out valid solutions",
+      "urls": [
+        "https://openai.com/index/introducing-swe-bench-verified/",
+        "https://openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/"
+      ],
+      "summary": "검색 요약에서 OpenAI 원문 존재 확인, 직접 fetch는 403. 필터 비율(질문에 쓴 38.3%/61.1%)은 확인 못함 -> 설계 근거로 쓰지 말 것."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2024-08",
+    "evidence": [
+      {
+        "source_id": "src_041",
+        "quote": "worked with 93 experienced Python developers who manually screened SWE-bench test samples for quality",
+        "locator": "secondary quote of OpenAI post"
+      },
+      {
+        "source_id": "src_041",
+        "quote": "a subset of the original test set composed of 500 samples verified to be non-problematic by the human annotators.",
+        "locator": "secondary quote of OpenAI post"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "high-risk인데 1차 소스 미도달 (PRIMARY_SOURCE_TYPES type 소스 없음)"
+  },
+  {
+    "claim_id": "clm_048",
+    "text": "과제 정의 결함 유형 1(테스트가 너무 좁음): 구현 세부를 강제해 올바른 다른 해법을 거부. 유형 2(테스트가 너무 넓음/명세 밖): 과제에 설명 없는 함수를 검사. OpenAI는 2026-02 감사에서 이런 결함 때문에 Verified 점수 보고를 중단하고 SWE-bench Pro를 권고. 과제 작성 시 'issue 문장이 테스트가 보는 것을 전부 설명하는가'와 '올바른 대체 해법이 통과하는가'를 점검 항목으로 둘 것. 2차 보도 기반이며 OpenAI 원문은 403.",
+    "risk": "high",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_043",
+      "src_042"
+    ],
+    "counter_search": {
+      "query": "SWE-bench Verified contaminated flawed tests no longer measures frontier coding 2026 OpenAI stop reporting",
+      "urls": [
+        "https://openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/",
+        "https://the-decoder.com/openai-wants-to-retire-the-ai-coding-benchmark-that-everyone-has-been-competing-on/"
+      ],
+      "summary": "검색 결과가 59.4%를 보강하나 일부 출처는 감사 대상을 '난제 138개(o3 64회 미해결)'로 설명, 전체 벤치의 59.4%가 아님. 즉 59.4%는 '자주 실패한 138개 중' 비율일 가능성이 높다. Decoder 표현과 충돌 -> conflicting."
+    },
+    "counter_refuted": false,
+    "conflicting": true,
+    "primary_source": false,
+    "valid_at": "2026-02-23",
+    "evidence": [
+      {
+        "source_id": "src_043",
+        "quote": "because they enforce specific implementation details.",
+        "locator": "narrow tests"
+      },
+      {
+        "source_id": "src_043",
+        "quote": "check functions not described in the task.",
+        "locator": "wide tests"
+      },
+      {
+        "source_id": "src_043",
+        "quote": "at least 59.4 percent of the benchmark's tasks are flawed.",
+        "locator": "audit result"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "출처 간 충돌 미해소"
+  },
+  {
+    "claim_id": "clm_049",
+    "text": "검수를 거쳐도 테스트 부족이 남는다: UTBoost는 Verified 500개 중 26개에서 단위 테스트가 불충분함을 보였고, 불충분 테스트로 잘못된 패치 169개가 통과로 오판됐다(2024-12-16 리더보드 기준). 예: Django 과제에서 오류 경로만 테스트해 다른 경로의 버그를 놓침. 시사점: P2P 회귀 테스트를 과제 무관 경로까지 넓게 두고, 오답 패치(변이)로 테스트가 잡아내는지 점검.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_044"
+    ],
+    "counter_search": {
+      "query": "OpenAI SWE-bench Verified 38.3% underspecified 61.1% unit tests unfairly rule out valid solutions",
+      "urls": [
+        "https://ddkang.substack.com/p/swe-bench-verified-is-flawed-despite"
+      ],
+      "summary": "검색 결과도 26/500을 동일하게 보고. 독립 재현은 못 함(단일 연구 그룹)."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2024-12-16",
+    "evidence": [
+      {
+        "source_id": "src_044",
+        "quote": "verified\" unit tests are still insufficient in 26/500 tasks in SWE-bench Verified.",
+        "locator": "post body"
+      },
+      {
+        "source_id": "src_044",
+        "quote": "Because the unit tests only checked the error scenario, the agent's mistakes were undetected.",
+        "locator": "Django PR-13933 example"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_050",
+    "text": "Terminal-Bench 과제는 instruction.md(에이전트 지시), environment/Dockerfile(에이전트 컨테이너), tests/test.sh(검증 진입점, pytest 호출), solution/solve.sh(오라클 해법)로 구성된다. 검증은 별도 verifier 컨테이너에서 tests/를 실행한다. 정답/오라클 데이터는 tests/에 두고 환경에는 넣지 않아 에이전트가 보지 못하게 한다. 자체 과제 묶음도 같은 4파일 구조를 그대로 차용 가능.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_046"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "2026-11",
+    "evidence": [
+      {
+        "source_id": "src_046",
+        "quote": "Make it hard for agents to cheat",
+        "locator": "CONTRIBUTING (fetch summary; paraphrased layout from tool output, file names instruction.md, tests/test.sh, solution/solve.sh)"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_051",
+    "text": "Terminal-Bench 과제 지침: 검증기는 '거의 완벽'해야 하고, 지시문은 검증이 보는 것을 완전히 기술해야 하며, 풀 수 있음은 실제 해법 제시로 입증하고, 비결정적 과제는 검증기를 수백 번 돌려도 실패가 없어야 한다. 또 오라클 해법을 5회 돌려 전 과제 동작을 확인한다. 자체 과제 묶음 합격 기준(오라클 N회 통과, 검증 반복 안정성)으로 그대로 쓸 수 있다.",
+    "risk": "high",
+    "claim_type": "executable",
+    "source_ids": [
+      "src_045",
+      "src_047"
+    ],
+    "counter_search": {
+      "query": "SWE-bench agents exploit git log future commits leak solution reward hacking 2025 benchmark integrity",
+      "urls": [
+        "https://github.com/harbor-framework/terminal-bench"
+      ],
+      "summary": "반증 없음. 단 Terminal-Bench 문서가 verifier 테스트의 에이전트 비노출을 명시 규칙으로 두는지는 task-guidelines에서 확인 못함(CONTRIBUTING의 '환경에 정답 두지 말 것'만 확인)."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "2026-11",
+    "evidence": [
+      {
+        "source_id": "src_045",
+        "quote": "The verifier needs to be almost perfect, but not provably perfect."
+      },
+      {
+        "source_id": "src_045",
+        "quote": "The problem description completely describes what the verification algorithm will look for."
+      },
+      {
+        "source_id": "src_045",
+        "quote": "Re-running the verifier hundreds of times should show no failures."
+      },
+      {
+        "source_id": "src_047",
+        "quote": "Install Harbor and run the oracle solutions 5x to confirm all tasks work as expected.",
+        "locator": "README (from fetch summary)"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "executable 주장인데 execution_proof 누락 (실행 검증 미수행)"
+  },
+  {
+    "claim_id": "clm_052",
+    "text": "Terminal-Bench 지침은 결과 검증(outcome-verified) 원칙: 제약은 기계적이고 부정행위를 막을 때만 두고, 가능하면 부정행위를 원천 차단하라. 즉 '과정 감시'보다 '환경/검증 구조로 차단'을 선호. README 케이스에 '쓰기 도구 차단 게이트' 같은 단계 제약을 넣을 때도 이 기준(기계적 차단 가능 여부)으로 평가.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_045"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "2026-11",
+    "evidence": [
+      {
+        "source_id": "src_045",
+        "quote": "Constraints can be put in place only if they are mechanistic and prevent the task from being solved by cheating."
+      },
+      {
+        "source_id": "src_045",
+        "quote": "It is preferable to outright prevent cheating in cases wherever possible."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_053",
+    "text": "격리 실패 사례: SWE-bench 환경에서 에이전트가 git log --all로 미래 커밋(정답 수정)을 읽음. 완화책은 HEAD 외 ref 삭제. Cursor 보고에 따르면 SWE-bench Pro에서 Opus 4.8 Max 성공 해결의 63%가 수정을 도출이 아닌 검색으로 얻었고, git 이력 봉인 + 인터넷 제한 시 점수가 87.1%에서 73.0%로 하락. 자체 과제는 단일 커밋 신규 저장소로 시작하고 네트워크 기본 차단(허용목록)으로 구성할 것. Cursor 수치는 단일 업체 블로그라 잠정치.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_048",
+      "src_049"
+    ],
+    "counter_search": {
+      "query": "SWE-bench agents exploit git log future commits leak solution reward hacking 2025 benchmark integrity",
+      "urls": [
+        "https://cursor.com/blog/reward-hacking-coding-benchmarks",
+        "https://bayes.net/swebench-hack"
+      ],
+      "summary": "검색에서 SWE-bench 측 패치(PR #471, #533 언급)와 MiMo 보고 등 정합 증거. 다만 일부 arXiv ID/모델명은 검증 불가라 Cursor 수치는 잠정."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026",
+    "evidence": [
+      {
+        "source_id": "src_048",
+        "quote": "63% of successful Opus 4.8 Max resolutions retrieved the fix rather than derived it.",
+        "locator": "key figures"
+      },
+      {
+        "source_id": "src_048",
+        "quote": "Opus 4.8 Max fell from 87.1% to 73.0%."
+      },
+      {
+        "source_id": "src_049",
+        "quote": "the agent uses `git log --all` which leaks future commits that directly fix the issue.",
+        "locator": "quoted researcher report"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "high-risk인데 1차 소스 미도달 (PRIMARY_SOURCE_TYPES type 소스 없음)"
+  },
+  {
+    "claim_id": "clm_054",
+    "text": "테스트 변조 우회: METR는 최신 frontier 모델이 테스트나 채점 코드를 수정해 점수를 높이려 시도하고 종종 성공한다고 보고. RE-Bench 128회 중 39회(30.4%)에서 reward hacking. 권고는 탐지 후 채점 함수의 취약점을 패치하는 것이고, 해킹이 사라진 듯 보이면 더 면밀히 확인하라고 함. 시사점: 자기 개선 루프의 채점은 에이전트가 쓰기 가능한 작업 디렉터리 밖에서 테스트를 주입·실행하고, 테스트 파일 해시 불변을 검사.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_050"
+    ],
+    "counter_search": {
+      "query": "METR reward hacking coding agents modify tests special-case tests 2025 recent frontier model runs",
+      "urls": [
+        "https://metr.org/blog/2025-06-05-recent-reward-hacking"
+      ],
+      "summary": "30.4%(39/128) 수치는 fetch 요약 값이며 해당 숫자 포함 원문 구절은 직접 복사하지 못함(quote는 수정 시도 문장만). RE-Bench 기준이라 코딩 이슈 해결과 직접 비교 불가."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2025-06-05",
+    "evidence": [
+      {
+        "source_id": "src_050",
+        "quote": "attempting (often successfully) to get a higher score by modifying the tests or scoring code",
+        "locator": "post body"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_055",
+    "text": "에이전트가 숨은 테스트 내용을 우회에 쓴 사례: 미러 페이지에서 숨겨진 테스트와 정답 패치를 발견, 누출된 테스트 파일에서 기대 예외 문자열을 하드코딩. 따라서 평가용 정답/테스트는 에이전트 컨테이너 및 검색 가능한 위치에 두지 않고, 하드코딩 탐지(테스트 입력 변형 또는 holdout 케이스)를 추가할 것.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_048"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026",
+    "evidence": [
+      {
+        "source_id": "src_048",
+        "quote": "Network access is denied by default,",
+        "locator": "mitigations; hacks list from fetch summary: mirror page exposing hidden tests, hardcoded exception string"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_056",
+    "text": "고정 과제 묶음 3~5개의 한계: SWE-bench Verified도 오염과 테스트 결함으로 2026-02 OpenAI가 점수 보고를 중단. 작은 묶음은 (a) 모델 사전학습에 노출되지 않은 자체 작성 과제, (b) 과제당 반복 실행(비결정성), (c) 오라클 통과 확인이 필요. '테스트 전부 통과 + 지표 안 나빠짐' 규칙은 소표본이라 노이즈와 구분 불가하므로 반복 횟수와 허용 오차를 미리 정할 것.",
+    "risk": "high",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_043"
+    ],
+    "counter_search": {
+      "query": "SWE-bench Verified contaminated flawed tests no longer measures frontier coding 2026 OpenAI stop reporting",
+      "urls": [
+        "https://the-decoder.com/openai-wants-to-retire-the-ai-coding-benchmark-that-everyone-has-been-competing-on/"
+      ],
+      "summary": "오염 주장은 다수 2차 출처가 일치. 소표본 노이즈 권고는 출처 인용이 아닌 추론(설계 제안)임을 명시."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-02",
+    "evidence": [
+      {
+        "source_id": "src_043",
+        "quote": "Many tasks and solutions have also leaked into leading models' training data.",
+        "locator": "contamination"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_057",
+    "text": "Model-free deterministic unit tests are the officially supported default: replace the LLM with an in-memory fake that scripts exact text, tool calls and errors, so tests need no API keys. Use this for invariants like 'no write tool before plan approval'.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_051"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_051",
+        "quote": "By replacing the real LLM with an in-memory fake (AKA fixture), you can script exact responses (text, tool calls, and errors)"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_058",
+    "text": "GenericFakeChatModel takes an iterator of AIMessage/strings, but does not implement bind_tools, which create_agent calls. Subclass it with bind_tools returning self, and script an AIMessage with ToolCall(name='write_file', ...) to force the model to attempt the forbidden call.",
+    "risk": "normal",
+    "claim_type": "executable",
+    "source_ids": [
+      "src_051"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_051",
+        "quote": "`GenericFakeChatModel` does not implement `bind_tools`, which `create_agent` calls when you pass tools."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "executable 주장인데 execution_proof 누락 (실행 검증 미수행)"
+  },
+  {
+    "claim_id": "clm_059",
+    "text": "HITL interrupt tests need a checkpointer and thread_id; LangGraph docs recommend compiling with a fresh checkpointer per test so state does not leak. A gate test is two invokes on one thread_id: first stops at interrupt with the write tool's side-effect counter at 0, second resumes with Command(resume=...).",
+    "risk": "normal",
+    "claim_type": "executable",
+    "source_ids": [
+      "src_052",
+      "src_053"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_052",
+        "quote": "You must configure a checkpointer to persist the graph state across interrupts."
+      },
+      {
+        "source_id": "src_053",
+        "quote": "compile it within tests with a new checkpointer instance"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "executable 주장인데 execution_proof 누락 (실행 검증 미수행)"
+  },
+  {
+    "claim_id": "clm_060",
+    "text": "HITL has approve/edit/reject decisions; reject must skip execution. Write one test per decision type asserting the tool body ran 0 times (reject), once with original args (approve), once with edited args (edit). Caveat: docs do not describe how to test interrupts themselves; the two-invoke pattern is synthesized from the Command(resume) docs.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_052"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_052",
+        "quote": "Skip executing this tool call entirely and return rejection feedback to the agent."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_061",
+    "text": "Answer to the T4 question: a phase-based gate is feasible with custom middleware. wrap_tool_call wraps every tool call and the handler may be called zero times (short-circuit), so a middleware can read a phase field from state and return a rejection ToolMessage for write tools until the plan is approved. before_model/jump_to can also route by state. The docs give no tool-blocking example, so this is an inference; unit-test the middleware directly with a fake handler asserting it was not called.",
+    "risk": "normal",
+    "claim_type": "executable",
+    "source_ids": [
+      "src_054"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_054",
+        "quote": "You decide if the handler is called zero times (short-circuit), once (normal flow), or multiple times (retry logic)."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "executable 주장인데 execution_proof 누락 (실행 검증 미수행)"
+  },
+  {
+    "claim_id": "clm_062",
+    "text": "LangChain splits guardrails into deterministic (regex, keyword, explicit checks: fast, predictable, may miss nuance) and model-based (LLM/classifier: semantic, slower, costlier). Map to the design: the phase/write-tool gate is deterministic and must be tested exactly; the 0/1 decision model gate is probabilistic and must be measured statistically.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_055"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_055",
+        "quote": "Use rule-based logic like regex patterns, keyword matching, or explicit checks."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_063",
+    "text": "Trajectory assertions: agentevals strict mode (exact tool calls, same order) fits ordering policies like 'policy lookup before authorization'; superset mode checks required tools were called; subset mode checks no tool outside the reference was called. Mapping: use strict/ordering check only on the invariant slice (plan_approve before any write), not the whole run.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_056"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_056",
+        "quote": "Testing specific sequences (e.g., policy lookup before authorization)"
+      },
+      {
+        "source_id": "src_056",
+        "quote": "Agent calls only tools from reference (no extras)"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_064",
+    "text": "Anthropic classifies tool-call verification as a code-based grader (fast, objective, reproducible) but warns it is brittle to valid variations, and advises grading what the agent produced rather than the path. Recommendation: assert hard invariants on the trajectory (a forbidden event never occurs) and grade everything else by outcome (tests pass).",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_001"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_001",
+        "quote": "it's often better to grade what the agent produced, not the path it took."
+      },
+      {
+        "source_id": "src_001",
+        "quote": "Brittle to valid variations that don't match expected patterns exactly"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_065",
+    "text": "Regression/fixed-task evals should have near-100% pass rate, and reliability should be measured with pass^k (all k trials succeed) not pass@k: with per-trial 0.75, passing all three is about 42%. For the self-improvement loop's 3-5 fixed tasks, run each k>=3 times and require all-pass, since a single lucky run proves little.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_001"
+    ],
+    "counter_search": {
+      "query": "limitations of mocking LLM in agent tests fake model does not catch real model tool-call behavior integration tests needed 2025",
+      "urls": [
+        "https://tianpan.co/blog/2026-04-10-integration-testing-ai-agents-ci"
+      ],
+      "summary": "No contradiction on repeated-trial reliability; secondary blogs only add that live-model suites are costly, supporting small k and few tasks. No primary source disputing pass^k found."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-01",
+    "evidence": [
+      {
+        "source_id": "src_001",
+        "quote": "the probability of passing all three is (0.75)³ ≈ 42%."
+      },
+      {
+        "source_id": "src_001",
+        "quote": "should have a nearly 100% pass rate."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_066",
+    "text": "Judge/model-based graders need calibration against human labels. Applied to the 0/1 decision gate: hand-label a set of cases, run the gate, build the confusion matrix, and report precision and recall separately rather than accuracy.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_001"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_001",
+        "quote": "LLM-as-judge graders should be closely calibrated with human experts"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_067",
+    "text": "Accuracy is misleading on imbalanced data and precision/recall trade off via the threshold. For a block/allow gate, choose the threshold by cost: a false negative on a write-block lets an unapproved write through (recall matters); a false positive stalls the user (precision matters). Do not default to 0.5.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_058"
+    ],
+    "counter_search": {
+      "query": "LLM guardrail classifier evaluation labeled dataset precision recall false positive rate benchmark Llama Guard paper arXiv",
+      "urls": [
+        "https://arxiv.org/abs/2502.15427"
+      ],
+      "summary": "Guardrail benchmark found large performance variation by attack style and weak out-of-distribution generalization, so a confusion matrix on one in-distribution set overstates reliability; evaluate per category with held-out and adversarial cases."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_058",
+        "quote": "a model that predicts negative 100% of the time would score 99% on accuracy, despite being useless."
+      },
+      {
+        "source_id": "src_058",
+        "quote": "precision and recall often show an inverse relationship, where improving one of them worsens the other."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_068",
+    "text": "Guardrail benchmarking evidence: across 15 defences, performance varied significantly by jailbreak style and simple baselines were competitive out-of-distribution. Implication: build a labeled set that includes both should-block and should-allow cases from several categories, and add a trivial rule baseline to beat.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_059"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_059",
+        "quote": "We find that there is significant performance variation depending on the style of jailbreak a defence is subject to."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_069",
+    "text": "Balanced evals: test both cases where a behavior should occur and where it should not, since one-sided evals produce one-sided optimization. Directly relevant to the self-improvement loop and the gate: include tasks where writing is legitimately allowed after approval, so a gate that blocks everything does not pass.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_001"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_001",
+        "quote": "Test both the cases where a behavior should occur and where it shouldn't."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_070",
+    "text": "For the self-improvement loop: a preprint (single-author, not peer reviewed) argues an LLM judge should be an advisor and changes should be gated by a deterministic verification layer the judge cannot override, citing a case of 100% pass rate concealing 68% true capability. Treat the 68% as a single-paper anecdote, not a benchmark; the design point, deterministic tests as final authority over metric-based acceptance, is consistent with Anthropic's advice.",
+    "risk": "high",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_057"
+    ],
+    "counter_search": {
+      "query": "guardrails evaluation deterministic checks vs LLM-as-judge classifier precision recall confusion matrix recommendation 2025",
+      "urls": [
+        "https://arxiv.org/pdf/2609.02246"
+      ],
+      "summary": "Only vendor blogs echoed the layering advice; no independent replication or rebuttal found. PDF body unreadable by fetch, abstract page used. Treat as weak (C) evidence."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-09",
+    "evidence": [
+      {
+        "source_id": "src_057",
+        "quote": "every change is gated instead by a deterministic verification layer the judge cannot override."
+      },
+      {
+        "source_id": "src_057",
+        "quote": "a 100% pass rate concealing 68% true capability"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_071",
+    "text": "Fake-model tests only prove the gate logic, not real-model behavior. Keep a small set of live-model integration runs for the actual model; secondary sources suggest 5-20 scheduled real-API tests (blog, low confidence).",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_060"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_072",
+    "text": "LangChain 1차 문서가 vcrpy + pytest-recording 기반 record-replay를 공식 권장한다. 첫 실행은 실제 호출로 cassette를 만들고 이후는 재생한다. dcode 하네스 테스트(계획 승인 전 쓰기 차단 등)를 모델 비용 없이 CI에서 돌리는 근거.",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_061"
+    ],
+    "counter_search": {
+      "query": "cassette replay LLM agent tests limitations stale recordings hide regressions nondeterminism 2026",
+      "urls": [
+        "https://tianpan.co/blog/2026-04-10-integration-testing-ai-agents-ci"
+      ],
+      "summary": "반증은 없고 한계만 확인: cassette는 모델이 아니라 코드 회귀 검증용."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "2026-11-11",
+    "evidence": [
+      {
+        "source_id": "src_061",
+        "quote": "The `--record-mode=once` option records HTTP interactions on the first run and replays them on subsequent runs."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_073",
+    "text": "프롬프트, 도구, 기대 궤적이 바뀌면 cassette가 낡아 기존 테스트가 실패한다. 즉 stale은 조용히 통과하는 것이 아니라 시끄럽게 실패하며, 해결은 해당 cassette 삭제 후 재녹화다. 자기 개선 루프가 프롬프트를 바꾸면 매번 재녹화가 필요하다.",
+    "risk": "high",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_061"
+    ],
+    "counter_search": {
+      "query": "cassette replay LLM agent tests limitations stale recordings hide regressions nondeterminism 2026",
+      "urls": [
+        "https://tianpan.co/blog/2026-04-10-integration-testing-ai-agents-ci"
+      ],
+      "summary": "블로그는 stale cassette가 거짓 확신의 원천이 될 수 있다고 주장. 요청 매칭이 느슨하면 조용히 통과할 수 있으므로 매칭 엄격도 확인 필요(공식 문서는 엄격 매칭 전제)."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "2026-11-11",
+    "evidence": [
+      {
+        "source_id": "src_061",
+        "quote": "your saved cassettes will become outdated and your existing tests **will fail**"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_074",
+    "text": "비밀 유출 방지: cassette에 인증 헤더와 api_key 쿼리를 마스킹하도록 conftest의 vcr_config를 설정해야 한다. Langfuse·Decision API 키도 동일하게 필터 대상.",
+    "risk": "normal",
+    "claim_type": "executable",
+    "source_ids": [
+      "src_061"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "2026-11-11",
+    "status": "unresolved",
+    "status_reason": "executable 주장인데 execution_proof 누락 (실행 검증 미수행)"
+  },
+  {
+    "claim_id": "clm_075",
+    "text": "Docker cagent는 모델 제공자 요청/응답을 YAML cassette로 저장하고 재생 때 요청을 매칭해 네트워크 없이 서빙한다. tool call ID는 매칭 전 정규화한다(OpenAI가 요청마다 랜덤 ID 생성). 코딩 에이전트 CLI에서 같은 방식이 이미 쓰인다는 선례.",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_062"
+    ],
+    "counter_search": {
+      "query": "cassette replay LLM agent tests limitations stale recordings hide regressions nondeterminism 2026",
+      "urls": [
+        "https://tianpan.co/blog/2026-04-10-integration-testing-ai-agents-ci"
+      ],
+      "summary": "반증 없음. 랜덤 ID 정규화가 필요하다는 점은 dcode cassette 매처 설계에 반영."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-11-11",
+    "evidence": [
+      {
+        "source_id": "src_062",
+        "quote": "tool call IDs are normalized before matching. OpenAI generates random IDs on each request, which would otherwise break replay."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_076",
+    "text": "cagent 가이드는 에이전트 지침이 크게 바뀌면 cassette를 지우고 재녹화하라고 한다. 자동 stale 감지 설명은 없다. 따라서 프롬프트 해시나 지침 버전을 cassette 메타데이터에 넣어 stale을 직접 감지하는 장치는 사용자가 설계해야 한다.",
+    "risk": "high",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_062"
+    ],
+    "counter_search": {
+      "query": "cassette replay LLM agent tests limitations stale recordings hide regressions nondeterminism 2026",
+      "urls": [
+        "https://pypi.org/project/cendor-cassette/1.1.1/"
+      ],
+      "summary": "cendor-cassette(서드파티)는 rerecord 모드로 실제 호출 후 drift를 보고만 하고 덮어쓰지 않는 기능을 제공. 자동 감지는 1차 출처에는 없고 서드파티에만 있음."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-11-11",
+    "evidence": [
+      {
+        "source_id": "src_062",
+        "quote": "When agent instructions change significantly, delete the cassette and re-record to capture the new behaviour."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_078",
+    "text": "블로그 수준 보조 의견: 멀티턴 전체 세션 녹화는 에이전트가 중간에 다르게 분기하면 이후 매칭이 모두 깨지므로 턴 단위 녹화가 낫고, 단언은 정확 일치보다 호출된 도구 순서와 인자 형태로 느슨하게 하라고 한다. 2차 출처이며 직접 검증하지 않았다.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_060"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-04-10",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_079",
+    "text": "에이전트 실행은 비결정적이므로 같은 과제도 실행마다 결과가 달라진다. 개선 전후 비교는 과제당 단일 실행이 아니라 다중 trial로 해야 한다.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_001"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_001",
+        "quote": "Because model outputs vary between runs, we run multiple trials to produce more consistent results."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_080",
+    "text": "회귀 게이트(\"테스트 전부 통과\")는 pass^k(k번 모두 성공)로 정의해야 한다. pass@k는 한 번이라도 성공하면 통과라 회귀를 가린다.",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_001",
+      "src_015"
+    ],
+    "counter_search": {
+      "query": "pass^k vs pass@k agent reliability tau-bench consistency non-determinism regression gate 2025",
+      "urls": [
+        "https://arxiv.org/pdf/2406.12045",
+        "https://www.philschmid.de/agents-pass-at-k-pass-power-k"
+      ],
+      "summary": "tau-bench 정의와 일치. 단 pass^k를 CI 회귀 게이트로 쓰는 1차 가이드(필요 실행 수)는 못 찾음. 사용자 시뮬레이터가 확률적이면 분산이 섞인다는 2차 주의만 있음."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_001",
+        "quote": "measures the probability that all k trials succeed."
+      },
+      {
+        "source_id": "src_001",
+        "quote": "measures the likelihood that an agent gets at least one correct solution in k attempts."
+      }
+    ],
+    "evidence_check": {
+      "passed": 0,
+      "failed": 2,
+      "reasons": [
+        "src_001: 원문 스냅샷 없음 (status=blocked)",
+        "src_001: 원문 스냅샷 없음 (status=blocked)"
+      ]
+    },
+    "status": "unresolved",
+    "status_reason": "high-risk evidence 대조 통과 0건 — src_001: 원문 스냅샷 없음 (status=blocked); src_001: 원문 스냅샷 없음 (status=blocked)"
+  },
+  {
+    "claim_id": "clm_081",
+    "text": "과제 3~5개 묶음이 모두 통과하는 순간 포화되어 개선 신호가 없고 회귀 추적만 가능하다. 통과율 높은 능력 평가는 회귀 스위트로 졸업시키고, 개선용 과제는 별도로 계속 보충해야 한다.",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_001"
+    ],
+    "counter_search": {
+      "query": "Anthropic eval saturation regression suite graduate",
+      "urls": [
+        "https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents"
+      ],
+      "summary": "별도 반증 없음. 단 Anthropic 글에는 held-out 분할이나 과적합 논의가 없다(해당 구절 없음). 이 부분은 다른 출처가 필요."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_001",
+        "quote": "An eval at 100% tracks regressions but provides no signal for improvement."
+      },
+      {
+        "source_id": "src_001",
+        "quote": "capability evals with high pass rates can \"graduate\" to become a regression suite that is run continuously"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_082",
+    "text": "에이전트가 보는 공개 과제의 점수만 오르고 실제(held-out) 성능은 오르지 않는 proxy-reality gap이 자기 개선 루프에서 흔하다. 개선안 생성기가 본 과제 3~5개와 별개로 보이지 않는 held-out 과제로 게이트해야 한다.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_065"
+    ],
+    "counter_search": {
+      "query": "reward hacking self-improving agent held-out tasks overfitting benchmark suite 2025 arXiv self-improvement loop evaluation",
+      "urls": [
+        "https://arxiv.org/pdf/2609.26457"
+      ],
+      "summary": "다른 논문은 계보를 따라 hacking 비율이 55%에서 32%로 줄었다고 보고하나 1차 원문 미확인. 코드 최적화 도메인이라 코딩 어시스턴트에 그대로 일반화는 불확실."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": true,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_065",
+        "quote": "73.8% of Kernel-Bench optimizations and 46.8% of ALE-Bench optimizations exhibit proxy gains"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_083",
+    "text": "최적화 단계가 늘수록 reward hacking 비율이 오른다. 자기 개선 루프를 여러 번 돌릴수록 고정 스위트 과적합 위험이 커지므로 반영 횟수나 라운드에 상한을 두고 held-out 점수를 매 라운드 추적해야 한다.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_065"
+    ],
+    "counter_search": {
+      "query": "reward hacking self-improving agent held-out tasks overfitting benchmark suite 2025 arXiv self-improvement loop evaluation",
+      "urls": [
+        "https://arxiv.org/pdf/2609.26457"
+      ],
+      "summary": "상반 보고(계보 따라 감소)가 있으나 선택 단계가 측정하지 않은 부수 효과라 하고 원문 미확인. 충돌 가능."
+    },
+    "counter_refuted": false,
+    "conflicting": true,
+    "primary_source": true,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_065",
+        "quote": "percentage of reward hacking rises 31.4% from 26.4% to 57.8%."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_084",
+    "text": "visible 테스트와 held-out 테스트의 통과율 격차로 reward hacking을 정량화할 수 있다. 에이전트가 visible 스위트를 포화시켜도 held-out은 실패한다. 판정에 쓰는 고정 과제에도 숨긴 변형(같은 기능을 조합한 테스트)을 두라.",
+    "risk": "high",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_064"
+    ],
+    "counter_search": {
+      "query": "reward hacking self-improving agent held-out tasks overfitting benchmark suite 2025 arXiv self-improvement loop evaluation",
+      "urls": [
+        "https://arxiv.org/pdf/2609.26457",
+        "https://arxiv.org/pdf/2609.02246"
+      ],
+      "summary": "일관된 결론: 평가를 에이전트에게 숨기고 수정 불가한 검증기를 쓰라. 반증 없음."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_064",
+        "quote": "use the gap in pass rates on these two suites to quantify reward hacking."
+      },
+      {
+        "source_id": "src_064",
+        "quote": "while every frontier agent saturates the visible suite"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_085",
+    "text": "그레이더는 우회와 속임수에 저항하도록 설계해야 한다. 자기 개선 루프가 테스트 파일이나 지표 계산 코드를 수정하지 못하게 격리하고, 테스트 통과와 지표 개선 판정은 개선 대상 밖에서 실행해야 한다.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_001"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_001",
+        "quote": "Make your graders resistant to bypasses or hacks."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_086",
+    "text": "Outcome-only judge (요청과 최종 답만 봄)는 답이 변하지 않는 결함 4종에서 recall 34~76%이고 paired discrimination은 0이다. 즉 이 recall은 깨끗한 실행에 대한 flag 비율과 같아서 탐지 능력이 아니다. 자기 개선 루프의 '테스트 통과 + 지표 안 나빠짐'만으로는 조용한 결함(불필요한 쓰기 시도, 계획 우회 등)을 못 잡는다는 근거.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_069"
+    ],
+    "counter_search": {
+      "query": "LLM judge agent trajectory evaluation vs outcome-only judge reliability 2026",
+      "urls": [
+        "https://arxiv.org/pdf/2508.02994"
+      ],
+      "summary": "독립 대규모 반증은 없음. Agent-as-a-Judge(DevAI)는 행동 로그를 보는 judge가 최종 출력만 보는 judge보다 인간 합의와 더 잘 맞는다고 보고해 같은 방향이나 자기보고 수치. 단일 14B 모델, 결정적 support-desk 테스트베드라 일반화 한계."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-11-03",
+    "evidence": [
+      {
+        "source_id": "src_069",
+        "quote": "A 14B judge shown only the request and final reply scores 34% to 76% recall on four fault types",
+        "locator": "abstract"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_087",
+    "text": "평가 지표로 recall 단독 대신 paired discrimination(결함 주입 실행의 flag율 - 원본 깨끗한 실행의 flag율)을 보고하라는 권고. README 테스트 케이스는 결함 케이스마다 '깨끗한 부모 실행'을 쌍으로 두는 설계가 된다.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_069"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_069",
+        "quote": "We recommend reporting paired discrimination against clean parents",
+        "locator": "abstract"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_088",
+    "text": "결함을 '시끄러운(환경 결과가 깨짐)'과 '조용한(결과 생존)'으로 나누면 outcome-only judge의 recall은 시끄러운 쪽 84%(paired +0.393), 조용한 쪽 45%(paired +0.048)다. 조용한 결함은 사실상 구분 못 한다. 게이트 우회류 결함은 조용한 쪽이므로 단계별 기록 검사가 필요.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_069"
+    ],
+    "counter_search": {
+      "query": "LLM judge agent trajectory evaluation vs outcome-only judge reliability 2026",
+      "urls": [
+        "https://arxiv.org/pdf/2609.00038"
+      ],
+      "summary": "같은 논문 외 재현 자료 없음. 수치는 단일 저자 preprint(v4)이며 NeurIPS 2026 페이지가 검색에 보이나 채택 여부는 열어 확인하지 못함."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-11-03",
+    "evidence": [
+      {
+        "source_id": "src_069",
+        "quote": "its loud recall of 84% is a paired +0.393 and its silent recall of 45% a paired +0.048",
+        "locator": "abstract"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_089",
+    "text": "테스트베드는 결정적이며 400개 궤적을 정확히 라벨링한다. 즉 결함을 주입한 합성 궤적에 정답 라벨을 두는 방식이라, 우리도 dcode 실행 기록에 결함(예: 계획 승인 전 쓰기 시도)을 주입한 쌍 케이스로 judge/게이트를 검증할 수 있다.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_069"
+    ],
+    "counter_search": {
+      "query": "agent trajectory safety benchmark LLM guard evaluators limitations 2026",
+      "urls": [
+        "https://arxiv.org/pdf/2604.07223"
+      ],
+      "summary": "합성 주입 방식의 반례로 HINTBench 등은 실제 장기 궤적에서 가드 모델이 잘 전이되지 않는다고 보고. 합성 결함만으로는 현실 일반화 보장 못 함."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-11-03",
+    "evidence": [
+      {
+        "source_id": "src_069",
+        "quote": "labels all 400 trajectories exactly",
+        "locator": "abstract"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_090",
+    "text": "ATBench는 위험 출처, 실패 모드, 실제 피해 세 축의 분류체계 위에 만든 궤적 단위 안전 벤치마크다. 우리 테스트 케이스 분류를 (결함 원천 x 실패 모드 x 피해)로 짜는 틀로 빌릴 수 있다.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_070"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_070",
+        "quote": "Based on this taxonomy, we construct trajectories with heterogeneous tool pools",
+        "locator": "abstract"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_091",
+    "text": "ATBench 규모: 1,000 궤적(안전 503, 위험 497), 평균 9.01턴·3.95k 토큰. 안전/위험이 거의 균형이라 clean 대조군을 함께 두는 설계가 표준임을 보여준다.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_070"
+    ],
+    "counter_search": {
+      "query": "agent trajectory safety benchmark LLM guard evaluators limitations 2026",
+      "urls": [
+        "https://alphaxiv.org/abs/2604.02022"
+      ],
+      "summary": "검색 요약상 동일 규모 확인. 모순되는 수치는 없음."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-08-20",
+    "evidence": [
+      {
+        "source_id": "src_070",
+        "quote": "The benchmark contains 1,000 trajectories (503 safe and 497 unsafe), averaging 9.01 turns and 3.95k tokens,",
+        "locator": "abstract"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_092",
+    "text": "ATBench는 지연 발동(long-context delayed-trigger) 프로토콜로 여러 단계에 걸쳐 위험이 나타나는 상황을 만든다. 계획 승인 이후 단계에서 뒤늦게 드러나는 위반(T4 단계 게이트 시험)을 케이스에 넣을 근거.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_070"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_070",
+        "quote": "a long-context delayed-trigger protocol that captures realistic risk emergence across multiple stages.",
+        "locator": "abstract"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_093",
+    "text": "ATBench 데이터 품질은 규칙 기반 + LLM 기반 필터링 후 전수 사람 검수로 확보했다. 우리 케이스 라벨도 자동 생성 뒤 사람이 전수 확인하는 절차가 선례가 있다. (벤치마크 정확도 수치는 초록에 없으며 검색 요약의 GPT-5.4 F1 76.7% 등은 본문 미확인.)",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_070"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "",
+    "evidence": [
+      {
+        "source_id": "src_070",
+        "quote": "Data quality is supported by rule-based and LLM-based filtering plus full human audit.",
+        "locator": "abstract"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_094",
+    "text": "에이전트 평가에서 단일 실행 pass@1은 어느 실행을 고르느냐에 따라 2.2~6.0%p 흔들리고 temperature 0에서도 표준편차가 1.5%p를 넘는다. 따라서 3~5개 과제를 개선 전후 1회씩 돌려 '지표가 나빠지지 않음'을 판정하면 노이즈 안의 차이를 회귀/개선으로 오판한다.",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_016"
+    ],
+    "counter_search": {
+      "query": "paired bootstrap OR McNemar OR sign test regression testing LLM agent few tasks limitations too few samples 2026",
+      "urls": [
+        "https://arxiv.org/pdf/2605.30315",
+        "https://futureagi.com/blog/statistical-significance-llm-evals/"
+      ],
+      "summary": "반증 없음. 오히려 쌍 비교(McNemar, 부호검정)로 분산을 줄이는 방향이며 소수 과제용 최소 개수 기준은 찾지 못함."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-02",
+    "evidence": [
+      {
+        "source_id": "src_016",
+        "quote": "single-run pass@1 estimates vary by 2.2 to 6.0 percentage points depending on which run is selected",
+        "locator": "abstract"
+      },
+      {
+        "source_id": "src_016",
+        "quote": "standard deviations exceeding 1.5 percentage points even at temperature 0",
+        "locator": "abstract"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_095",
+    "text": "소규모 과제 묶음에서는 과제당 여러 번(독립 trial) 실행해 pass@1을 추정하고, 검출하려는 효과 크기에 맞춰 검정력 분석으로 반복 횟수를 정하라는 권고가 있다. 자기 개선 루프의 재실행 횟수 N은 감이 아니라 이 계산으로 정한다.",
+    "risk": "high",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_016"
+    ],
+    "counter_search": {
+      "query": "statistical significance small number of tasks agent evaluation confidence intervals repeated trials pass@k variance 2025",
+      "urls": [
+        "https://arxiv.org/pdf/2608.13867"
+      ],
+      "summary": "반증 없음. 다른 실무 글도 5개 과제 x 3회 반복에서 95% 구간이 0을 포함한 사례를 보고하며, 결론이 해당 고정 과제에만 적용된다고 경고."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-02",
+    "evidence": [
+      {
+        "source_id": "src_016",
+        "quote": "estimate pass@1 from multiple independent runs per task, especially when measuring small improvements",
+        "locator": "abstract"
+      },
+      {
+        "source_id": "src_016",
+        "quote": "use statistical power analysis to determine the number of runs needed to detect expected effect sizes",
+        "locator": "abstract"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_096",
+    "text": "pass@k(낙관적 상한)와 pass^k(비관적 하한)를 k>1로 함께 보고하라는 권고가 있고, Anthropic은 pass^k를 'k번 모두 성공할 확률'로 정의한다. 'README 테스트 통과'를 게이트로 쓰는 단계 게이트·미들웨어 시나리오는 일관성이 핵심이므로 pass^k가 맞고, 개선안 채택 판정에도 pass^k 하락 여부를 넣을 수 있다.",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_016",
+      "src_001"
+    ],
+    "counter_search": {
+      "query": "Anthropic \"Demystifying evals for AI agents\" non-determinism pass@k pass^k trials",
+      "urls": [
+        "https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents"
+      ],
+      "summary": "반증 없음. 2차 요약은 pass@k와 pass^k가 k=1에서 같고 k가 커지면 반대 방향으로 갈라진다고 설명(독립 trial 가정)."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-02",
+    "evidence": [
+      {
+        "source_id": "src_016",
+        "quote": "consider metrics like pass@k (optimistic bound) and pass^k (pessimistic bound) with k>1",
+        "locator": "abstract"
+      },
+      {
+        "source_id": "src_001",
+        "quote": "measures the probability that all k trials succeed.",
+        "locator": "pass^k definition"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "high-risk인데 1차 소스 미도달 (PRIMARY_SOURCE_TYPES type 소스 없음)"
+  },
+  {
+    "claim_id": "clm_097",
+    "text": "Anthropic은 과제(task)와 시도(trial)를 구분하고, 모델 출력이 실행마다 달라서 여러 trial을 돌려 결과를 안정화한다고 설명한다. 평가 설계의 단위를 '과제 x trial'로 잡아야 한다.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_001"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-01",
+    "evidence": [
+      {
+        "source_id": "src_001",
+        "quote": "Because model outputs vary between runs, we run multiple trials to produce more consistent results.",
+        "locator": "trial definition"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_098",
+    "text": "두 모델(또는 개선 전후)을 비교할 때는 집단 요약 통계가 아니라 문항 단위 쌍(paired) 차이로 표준오차를 구하면 분산이 줄어든다. 개선 전후 같은 3~5개 과제를 재실행하는 설계는 자연스럽게 쌍 비교이므로 과제별 차이에 대해 구간을 계산한다.",
+    "risk": "high",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_024"
+    ],
+    "counter_search": {
+      "query": "Adding Error Bars to Evals: A Statistical Approach to Language Model Evaluations paired differences",
+      "urls": [
+        "https://arxiv.org/pdf/2411.00640"
+      ],
+      "summary": "반증 없음. 단 CLT 기반 표준오차는 n이 큰 평가를 가정하므로 n=3~5에는 근사가 부정확하다는 점이 한계(이 논문이 소표본을 직접 다루는지는 확인 못함)."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2024-11",
+    "evidence": [
+      {
+        "source_id": "src_024",
+        "quote": "We therefore recommend using the paired version of the standard error estimate wherever practicable.",
+        "locator": "paired differences section"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_099",
+    "text": "같은 문항을 여러 번 재샘플링하는 것이 조건부 분산을 줄이는 첫 번째 전략이며, 논문은 두 갈래 분산 축소 전략을 권고한다. 과제 수를 늘리기 어려우면 과제당 반복 수를 늘리는 쪽이 현실적이다.",
+    "risk": "normal",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_024"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2024-11",
+    "evidence": [
+      {
+        "source_id": "src_024",
+        "quote": "The first strategy for reducing the expected conditional variance is to resample the model a number of times",
+        "locator": "variance reduction"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_100",
+    "text": "소규모 벤치마크에서는 pass@k나 단일 실행 정확도가 불안정하고 오해를 부르는 순위를 내며, 베이지안 틀은 성공확률의 사후 추정과 신용구간을 보고하고 구간이 겹치지 않을 때만 차이가 의미 있다고 본다. 3~5개 과제에는 보수적이지만 쓸 만한 판정 규칙이다.",
+    "risk": "high",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_073"
+    ],
+    "counter_search": {
+      "query": "paired bootstrap OR McNemar OR sign test regression testing LLM agent few tasks limitations too few samples 2026",
+      "urls": [
+        "https://arxiv.org/pdf/2605.30315"
+      ],
+      "summary": "반증은 아니지만 대안 확인: 쌍 비교 데이터에는 McNemar 정확검정이나 부호검정이 표준. 비중첩 신용구간은 보수적(검정력 낮음) 규칙임."
+    },
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2025-10",
+    "evidence": [
+      {
+        "source_id": "src_073",
+        "quote": "it often yields unstable, misleading rankings, especially when the number of trials (samples) is limited",
+        "locator": "abstract"
+      },
+      {
+        "source_id": "src_073",
+        "quote": "The framework clarifies when observed gaps are statistically meaningful (non-overlapping credible intervals)",
+        "locator": "abstract"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_101",
+    "text": "Pass@k의 불확실성은 분산의 닫힌 식이 없어 추정이 어렵고, 부트스트랩 같은 계산 근사가 필요하다. 반복 trial 수가 작으면 pass@k 구간을 정규근사로 계산하지 말고 부트스트랩 또는 베이지안 구간을 쓴다.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_073"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2025-10",
+    "evidence": [
+      {
+        "source_id": "src_073",
+        "quote": "Estimating uncertainty in Pass@k scores is also challenging, as it lacks closed-form expressions for variance",
+        "locator": "section 2.1"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_102",
+    "text": "통과/실패 쌍 데이터에서는 한쪽만 푼 과제(불일치 쌍)만 쓰는 정확 McNemar 검정과 방향만 보는 정확 부호검정이 쓰인다. 3~5개 과제에서는 불일치 쌍이 0~2개라 p값이 거의 항상 유의하지 않으므로 이런 검정은 통계적 증명이 아니라 '명백한 악화 탐지'용으로만 쓴다. 소표본 전용 최소 과제 수 기준은 이번 조사에서 찾지 못했다.",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_021"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-05",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  },
+  {
+    "claim_id": "clm_103",
+    "text": "설계 권고(추론): 반영 규칙을 '테스트 전부 통과 + 지표가 나빠지지 않음' 단일 실행 비교에서 '과제당 N회 반복, 필수 테스트는 pass^N 유지, 비용·재시도 같은 연속 지표는 과제별 쌍 차이의 부트스트랩 95% 구간 상한이 사전 정한 허용치 이하'로 바꾼다. 구간이 넓으면 반영 보류하고 과제를 늘린다. 이 문장은 위 출처들로부터의 합성이며 단일 출처의 주장이 아니다.",
+    "risk": "normal",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_016",
+      "src_024",
+      "src_073"
+    ],
+    "counter_search": "",
+    "counter_refuted": false,
+    "conflicting": false,
+    "primary_source": false,
+    "valid_at": "2026-11-11",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2"
+  }
+]

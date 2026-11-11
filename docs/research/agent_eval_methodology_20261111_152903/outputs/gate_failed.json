@@ -1,0 +1,17 @@
+{
+  "exit_code": 1,
+  "kind": "process_violation",
+  "reasons": [
+    "clm_008: executable 주장인데 execution_proof 누락 (실행 검증 미수행)",
+    "clm_043: executable 주장인데 execution_proof 누락 (실행 검증 미수행)",
+    "clm_051: executable 주장인데 execution_proof 누락 (실행 검증 미수행)",
+    "clm_058: executable 주장인데 execution_proof 누락 (실행 검증 미수행)",
+    "clm_059: executable 주장인데 execution_proof 누락 (실행 검증 미수행)",
+    "clm_061: executable 주장인데 execution_proof 누락 (실행 검증 미수행)",
+    "clm_074: executable 주장인데 execution_proof 누락 (실행 검증 미수행)"
+  ],
+  "verified_claims_removed": false,
+  "checked_at": "2026-11-11T06:40:06.717504+00:00",
+  "checker": "validate_ledger.py",
+  "next_step": "누락된 counter_search·execution_proof를 수행해 ledger 갱신 후 재실행"
+}

@@ -1,0 +1,53 @@
+# Query log (에이전트 간 중복 표시)
+
+- [taxonomy] survey evaluation of LLM-based agents arXiv 2025 trajectory evaluation final response benchmarks
+- [taxonomy] LangChain agentevals trajectory match deterministic vs LLM judge 2025 GenericFakeChatModel testing agents record replay
+- [taxonomy] tau-bench pass^k reliability arXiv tool-agent-user benchmark final database state comparison
+- [taxonomy] agent evaluation outcome-only misses unsafe process violations trajectory evaluation necessary 2025 arXiv
+- [nondeterminism] Anthropic "Adding error bars to evals" statistical approach to language model evaluations
+- [nondeterminism] tau-bench pass^k metric reliability agents arXiv
+- [nondeterminism] Anthropic "Demystifying evals for AI agents" pass@k pass^k trials 2026
+- [nondeterminism] Defeating Nondeterminism in LLM Inference temperature 0 batch invariance Thinking Machines 2025
+- [nondeterminism] LLM agent benchmark run-to-run variance multiple runs confidence intervals single run misleading arXiv 2025
+- [nondeterminism] automatic prompt optimization overfitting validation set held-out test split small dev set arXiv 2025
+- [nondeterminism] McNemar test paired comparison small number of tasks LLM agent evaluation statistical significance 2025
+- [nondeterminism] temperature 0 deterministic output same API mostly stable counterargument LLM nondeterminism small effect 2025
+- [nondeterminism] pass^k criticism limitations estimator high variance small n trials agent reliability 2026
+- [small_suite] Anthropic "Demystifying evals for AI agents" start small 20-50 tasks eval saturation
+- [small_suite] Evan Miller "Adding Error Bars to Evals" statistical approach small eval sets paired differences
+- [small_suite] self-improving coding agent regression gate accept only if benchmark not worse 2025 paper Darwin Godel Machine
+- [small_suite] Hamel Husain error analysis build eval dataset from failures LLM evals FAQ how many examples
+- [small_suite] GEPA reflective prompt evolution validation set Pareto candidate acceptance minibatch improvement overfitting 2025
+- [small_suite] OpenAI evals guide eval-driven development agents regression dataset small 2025 graders trace grading
+- [small_suite] non-inferiority test LLM prompt change regression gate paired bootstrap eval release 2025
+- [small_suite] "A Self-Improving Coding Agent" Robeyns SICA benchmark utility function arXiv 2025
+- [small_suite] Langfuse datasets experiments regression testing CI small dataset add production failures to dataset docs 2026
+- [small_suite] agent benchmark run-to-run variance single run unreliable multiple runs needed SWE-bench noise 2025 paper
+- [coding_benchmarks] SWE-bench Verified OpenAI 500 samples FAIL_TO_PASS PASS_TO_PASS tests too specific underspecified annotators
+- [coding_benchmarks] OpenAI SWE-bench Verified 38.3% underspecified 61.1% unit tests unfairly rule out valid solutions
+- [coding_benchmarks] SWE-bench agents exploit git log future commits leak solution reward hacking 2025 benchmark integrity
+- [coding_benchmarks] SWE-bench Verified contaminated flawed tests no longer measures frontier coding 2026 OpenAI stop reporting
+- [coding_benchmarks] METR reward hacking coding agents modify tests special-case tests 2025 recent frontier model runs
+- [guardrail_invariants] LangChain docs test agents GenericFakeChatModel unit testing agent 2025
+- [guardrail_invariants] LangChain human-in-the-loop middleware interrupt tool approval test resume Command 2025
+- [guardrail_invariants] LangSmith agent evaluation trajectory match strict tool call order evaluator agentevals
+- [guardrail_invariants] guardrails evaluation deterministic checks vs LLM-as-judge classifier precision recall confusion matrix recommendation 2025
+- [guardrail_invariants] OpenAI Agents SDK guardrails evaluation guidance evals agent trajectory grading tool calls 2025 safety best practices
+- [guardrail_invariants] Anthropic demystifying evals for AI agents code-based graders deterministic vs model-based graders tool calls transcript 2026
+- [guardrail_invariants] Google ML crash course classification accuracy precision recall confusion matrix threshold tradeoff false positives false negatives
+- [guardrail_invariants] limitations of mocking LLM in agent tests fake model does not catch real model tool-call behavior integration tests needed 2025
+- [guardrail_invariants] LLM guardrail classifier evaluation labeled dataset precision recall false positive rate benchmark Llama Guard paper arXiv
+- [expand:taxonomy:0] record replay cassette testing LLM agents VCR langchain-community vcrpy 2025 agent harness tests
+- [expand:taxonomy:0] LangChain docs integration tests vcrpy cassettes record HTTP responses langchain-tests 2025
+- [expand:taxonomy:0] cassette replay LLM agent tests limitations stale recordings hide regressions nondeterminism 2026
+- [expand:taxonomy:1] Anthropic "Demystifying evals for AI agents" non-determinism pass@k pass^k eval saturation
+- [expand:taxonomy:1] reward hacking self-improving agent held-out tasks overfitting benchmark suite 2025 arXiv self-improvement loop evaluation
+- [expand:taxonomy:1] pass^k vs pass@k agent reliability tau-bench consistency non-determinism regression gate 2025
+- [expand:taxonomy:2] LLM judge agent trajectory evaluation vs outcome-only judge reliability 2026
+- [expand:taxonomy:2] agent trajectory safety benchmark LLM guard evaluators limitations 2026
+- [expand:taxonomy:3] statistical significance small number of tasks agent evaluation confidence intervals repeated trials pass@k variance 2025
+- [expand:taxonomy:3] Adding Error Bars to Evals: A Statistical Approach to Language Model Evaluations paired differences
+- [expand:taxonomy:3] paired bootstrap OR McNemar OR sign test regression testing LLM agent few tasks limitations too few samples 2026
+- [expand:taxonomy:3] Anthropic "Demystifying evals for AI agents" non-determinism pass@k pass^k trials
+
+합계: 쿼리 49건 (중복 0) · WebSearch 호출 49건 / 세션 캡 200
