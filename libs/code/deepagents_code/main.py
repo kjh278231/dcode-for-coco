@@ -39,9 +39,10 @@ if TYPE_CHECKING:
     from deepagents_code.notifications import PendingNotification
     from deepagents_code.thread_ownership import ThreadLease
 
-from deepagents_code._env_vars import LAUNCH_TERM_PROGRAM
+from deepagents_code._env_vars import LAUNCH_TERM_PROGRAM, PLAN_GATE
 from deepagents_code._paths import PATHS, get_deepagents_home
 from deepagents_code._version import __version__
+from deepagents_code.assistant.options import plan_gate_enabled
 from deepagents_code.goal_state_limits import RUBRIC_CHAR_LIMIT, validate_rubric
 
 logger = logging.getLogger(__name__)
@@ -3525,6 +3526,7 @@ async def run_textual_cli_async(
         "sandbox_snapshot_name": sandbox_snapshot_name,
         "sandbox_setup": sandbox_setup,
         "enable_ask_user": True,
+        "plan_gate": plan_gate_enabled(os.environ),
         "enable_interpreter": enable_interpreter,
         "interpreter_ptc": interpreter_ptc,
         "interpreter_ptc_acknowledge_unsafe": interpreter_ptc_acknowledge_unsafe,
@@ -5460,6 +5462,27 @@ def _require_managed_config_or_exit() -> None:
         sys.exit(78)
 
 
+def _require_typesafe_key(args: argparse.Namespace, environ: Mapping[str, str]) -> None:
+    """Jev 키가 없으면 안내를 출력하고 종료 코드 1로 끝낸다.
+
+    Args:
+        args: 파싱한 명령행 인자.
+        environ: `.env`를 읽은 뒤의 환경변수.
+    """
+    if args.command is not None or not plan_gate_enabled(environ):
+        return
+    from deepagents_code.assistant.decider import KEY_ENV, OPENROUTER_KEY_ENV
+
+    if environ.get(KEY_ENV, "").strip() or environ.get(OPENROUTER_KEY_ENV, "").strip():
+        return
+    sys.stderr.write(
+        f"계획 게이트에는 Jev 판정 키가 필요하다. {KEY_ENV} 또는 "
+        f"{OPENROUTER_KEY_ENV}를 환경변수나 .env에 설정한다.\n"
+        f"게이트 없이 실행하려면 {PLAN_GATE}=0을 설정한다.\n"
+    )
+    sys.exit(1)
+
+
 def cli_main() -> None:
     """Entry point for console script.
 
@@ -6425,6 +6448,8 @@ def cli_main() -> None:
             sys.exit(0)
 
         output_format = getattr(args, "output_format", "text")
+
+        _require_typesafe_key(args, os.environ)
 
         if args.command == "help":
             from deepagents_code.ui import show_help

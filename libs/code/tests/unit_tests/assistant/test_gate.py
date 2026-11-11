@@ -1,0 +1,516 @@
+"""계획 게이트의 불변 조건 (SPEC 9.3 G1~G11, G14~G19). 그래프를 실제로 돌린다."""
+
+from __future__ import annotations
+
+import uuid
+from typing import TYPE_CHECKING, Any
+
+from deepagents.backends import CompositeBackend, LocalShellBackend
+from deepagents.middleware.filesystem import FilesystemMiddleware
+from langchain.agents import create_agent
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.tools import tool
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command
+
+from deepagents_code.agent import create_cli_agent
+from deepagents_code.assistant.decider import FakeDecider
+from deepagents_code.assistant.gate import PlanGateMiddleware, precheck_denies
+from deepagents_code.assistant.options import PHASE_KEY
+from deepagents_code.assistant.plan import PlanStore
+from deepagents_code.assistant.reviewer import ReviewResult
+from tests.unit_tests.assistant.fakes import (
+    FakeReviewer,
+    make_options,
+    scripted_model,
+    tool_call,
+)
+from tests.unit_tests.test_end_to_end import FixedGenericFakeChatModel, mock_settings
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from deepagents_code.assistant.decider import Decider
+
+
+# 메시지 객체를 테스트끼리 나눠 쓰지 않는다. 그래프가 id를 객체에 직접 적는다
+def explore() -> AIMessage:
+    return tool_call("task", {"description": "탐색", "subagent_type": "explorer"}, "t")
+
+
+def approval() -> AIMessage:
+    return tool_call("request_plan_approval", {}, "a")
+
+
+def done() -> AIMessage:
+    return AIMessage(content="끝")
+
+
+@tool
+def task(description: str, subagent_type: str) -> str:
+    """서브에이전트 대신 고정 탐색 요약을 돌려준다.
+
+    Returns:
+        탐색 요약.
+    """
+    del description, subagent_type
+    return "## 관련 파일\n- app.py: add 버그"
+
+
+def plan_args(**changes: Any) -> dict[str, Any]:
+    args: dict[str, Any] = {
+        "requirements": "app.py의 add 버그를 고친다",
+        "scope": "app.py의 add 함수",
+        "done_criteria": "true 명령이 종료 코드 0",
+        "steps": "1. add를 고친다",
+        "targets": ["app.py"],
+        "test_command": "true",
+        "memory_refs": "없음",
+        "open_questions": [],
+    }
+    args.update(changes)
+    return args
+
+
+def submit(call_id: str = "s", **changes: Any) -> AIMessage:
+    return tool_call("submit_plan", plan_args(**changes), call_id)
+
+
+def write(
+    tmp_path: Path, name: str, content: str = "x", call_id: str = "w"
+) -> AIMessage:
+    return tool_call(
+        "write_file",
+        {"file_path": str(tmp_path / name), "content": content},
+        call_id,
+    )
+
+
+class Harness:
+    """가짜 모델과 게이트로 만든 그래프 하나와 대화 하나."""
+
+    def __init__(
+        self,
+        tmp_path: Path,
+        script: list[AIMessage],
+        *,
+        decider: Decider | None = None,
+        reviewer: FakeReviewer | None = None,
+        interactive: bool = True,
+    ) -> None:
+        self.root = tmp_path
+        options = make_options(
+            tmp_path, decider=decider, reviewer=reviewer, interactive=interactive
+        )
+        backend = CompositeBackend(
+            default=LocalShellBackend(root_dir=tmp_path, virtual_mode=False),
+            routes={},
+        )
+        self.agent = create_agent(
+            model=scripted_model(script),
+            tools=[task],
+            middleware=[
+                FilesystemMiddleware(backend=backend),
+                PlanGateMiddleware(options, backend),
+            ],
+            checkpointer=InMemorySaver(),
+        )
+        self.config: Any = {"configurable": {"thread_id": str(uuid.uuid4())}}
+
+    async def say(self, text: str) -> dict[str, Any]:
+        return await self.agent.ainvoke(
+            {"messages": [HumanMessage(content=text)]}, self.config
+        )
+
+    async def resume(self, *answers: str) -> dict[str, Any]:
+        return await self.agent.ainvoke(
+            Command(resume={"answers": list(answers)}), self.config
+        )
+
+    async def state(self) -> dict[str, Any]:
+        return (await self.agent.aget_state(self.config)).values
+
+    def plan(self) -> Any:  # noqa: ANN401
+        store = PlanStore(self.root)
+        (plan_id,) = store.list_ids()
+        return store.load(plan_id)
+
+
+def tool_result(result: dict[str, Any], call_id: str) -> ToolMessage:
+    return next(
+        m
+        for m in result["messages"]
+        if isinstance(m, ToolMessage) and m.tool_call_id == call_id
+    )
+
+
+def approved_script() -> list[AIMessage]:
+    return [explore(), submit(), approval()]
+
+
+async def approved(tmp_path: Path, after: list[AIMessage], **kwargs: Any) -> Harness:
+    """G5까지 진행한다: 탐색, 제출, 승인 요청, "승인"."""
+    h = Harness(tmp_path, [*approved_script(), *after], **kwargs)
+    result = await h.say("app.py 버그 고쳐줘")
+    assert "__interrupt__" in result
+    h.last = await h.resume("승인")  # type: ignore[attr-defined]
+    # 승인이 실제로 executing으로 넘어갔는지 확인해 뒤 단언이 헛되이 통과하지 않게 한다
+    approval_reply = tool_result(h.last, "a")  # type: ignore[attr-defined]
+    assert "승인됐다" in str(approval_reply.content)
+    return h
+
+
+async def test_g1_write_without_plan_is_denied(tmp_path: Path) -> None:
+    h = Harness(tmp_path, [write(tmp_path, "app.py"), done()])
+    result = await h.say("app.py 만들어줘")
+    assert not (tmp_path / "app.py").exists()
+    assert tool_result(result, "w").status == "error"
+
+
+async def test_g2_destructive_shell_without_plan_is_denied(tmp_path: Path) -> None:
+    (tmp_path / "x").mkdir()
+    h = Harness(tmp_path, [tool_call("execute", {"command": "rm -rf x"}, "e"), done()])
+    result = await h.say("x 지워줘")
+    assert (tmp_path / "x").exists()
+    assert tool_result(result, "e").status == "error"
+
+
+async def test_g3_read_only_shell_without_plan_runs(tmp_path: Path) -> None:
+    (tmp_path / "marker.txt").write_text("")
+    h = Harness(tmp_path, [tool_call("execute", {"command": "ls"}, "e"), done()])
+    result = await h.say("파일 목록")
+    message = tool_result(result, "e")
+    assert message.status != "error"
+    assert "marker.txt" in str(message.content)
+
+
+async def test_g4_submit_without_exploring_is_denied(tmp_path: Path) -> None:
+    h = Harness(tmp_path, [submit(), done()])
+    result = await h.say("app.py 버그 고쳐줘")
+    assert tool_result(result, "s").status == "error"
+    assert not (tmp_path / ".deepagents" / "plans").exists()
+
+
+async def test_g5_approved_plan_opens_targets(tmp_path: Path) -> None:
+    h = await approved(tmp_path, [write(tmp_path, "app.py", "v1"), done()])
+    assert (tmp_path / "app.py").read_text() == "v1"
+    assert h.plan().status == "approved"
+    assert (await h.state())[PHASE_KEY] == "executing"
+
+
+async def test_g6_out_of_scope_write_denied_when_j4_fails(tmp_path: Path) -> None:
+    h = await approved(
+        tmp_path,
+        [write(tmp_path, "other.py"), done()],
+        decider=FakeDecider(script={"J4": 0.0}),
+    )
+    assert (await h.state())[PHASE_KEY] == "executing"
+    assert not (tmp_path / "other.py").exists()
+
+
+async def test_g7_out_of_scope_write_allowed_and_target_added(tmp_path: Path) -> None:
+    h = await approved(
+        tmp_path,
+        [write(tmp_path, "other.py"), done()],
+        decider=FakeDecider(script={"J4": 1.0}),
+    )
+    assert (tmp_path / "other.py").exists()
+    assert "other.py" in h.plan().targets
+
+
+async def test_g8_rejected_plan_closes_writes(tmp_path: Path) -> None:
+    h = Harness(tmp_path, [*approved_script(), write(tmp_path, "app.py"), done()])
+    await h.say("app.py 버그 고쳐줘")
+    result = await h.resume("거부")
+    assert (await h.state())[PHASE_KEY] == "idle"
+    assert h.plan().status == "rejected"
+    assert tool_result(result, "w").status == "error"
+    assert not (tmp_path / "app.py").exists()
+
+
+async def test_g9_free_text_answer_is_a_revision_request(tmp_path: Path) -> None:
+    h = Harness(tmp_path, [*approved_script(), done()])
+    await h.say("app.py 버그 고쳐줘")
+    result = await h.resume("테스트도 추가해 주세요")
+    assert (await h.state())[PHASE_KEY] == "planning"
+    assert "테스트도 추가해 주세요" in str(tool_result(result, "a").content)
+    assert h.plan().status == "draft"
+
+
+async def test_g10_review_stops_after_max_rounds(tmp_path: Path) -> None:
+    reviewer = FakeReviewer(
+        script=[ReviewResult(("의견 1",), ()), ReviewResult(("의견 2",), ())]
+    )
+    h = Harness(
+        tmp_path, [explore(), submit("s1"), submit("s2"), done()], reviewer=reviewer
+    )
+    result = await h.say("app.py 버그 고쳐줘")
+    first = tool_result(result, "s1")
+    assert first.status != "error"  # 리뷰 의견은 도구 오류가 아니다
+    assert "의견 1" in str(first.content)
+    plan = h.plan()
+    assert plan.status == "reviewed"
+    log = plan.sections["리뷰 기록"]
+    assert "### 1회차" in log
+    assert "### 2회차" in log
+    assert "의견 2" in log
+
+
+async def test_g11_protected_dir_denied_before_and_after_approval(
+    tmp_path: Path,
+) -> None:
+    protected = ".deepagents/plans/x.md"
+    h = Harness(
+        tmp_path,
+        [
+            explore(),
+            write(tmp_path, protected, call_id="w1"),
+            submit(),
+            approval(),
+            write(tmp_path, protected, call_id="w2"),
+            done(),
+        ],
+        decider=FakeDecider(),
+    )
+    first = await h.say("app.py 버그 고쳐줘")
+    assert tool_result(first, "w1").status == "error"
+    second = await h.resume("승인")
+    assert tool_result(second, "w2").status == "error"
+    assert not (tmp_path / protected).exists()
+
+
+async def test_g14_headless_approval_by_next_message(tmp_path: Path) -> None:
+    h = Harness(tmp_path, [*approved_script(), done(), done()], interactive=False)
+    result = await h.say("app.py 버그 고쳐줘")
+    assert "__interrupt__" not in result
+    assert (await h.state())[PHASE_KEY] == "awaiting_approval"
+    await h.say("승인")
+    assert (await h.state())[PHASE_KEY] == "executing"
+    assert h.plan().status == "approved"
+
+
+async def test_g15_headless_other_message_goes_back_to_planning(
+    tmp_path: Path,
+) -> None:
+    h = Harness(
+        tmp_path,
+        [*approved_script(), done(), write(tmp_path, "app.py"), done()],
+        interactive=False,
+    )
+    await h.say("app.py 버그 고쳐줘")
+    result = await h.say("다시 생각해 보자")
+    assert (await h.state())[PHASE_KEY] == "planning"
+    assert tool_result(result, "w").status == "error"
+    assert not (tmp_path / "app.py").exists()
+
+
+async def test_g16_transport_error_denies_scope_check(tmp_path: Path) -> None:
+    h = await approved(
+        tmp_path,
+        [write(tmp_path, "other.py"), done()],
+        decider=FakeDecider(script={"J4": None}),
+    )
+    assert (await h.state())[PHASE_KEY] == "executing"
+    assert not (tmp_path / "other.py").exists()
+
+
+async def test_g17_no_plan_gate_keeps_upstream_behavior(tmp_path: Path) -> None:
+    target = tmp_path / "app.py"
+    model = FixedGenericFakeChatModel(
+        messages=iter(
+            [
+                tool_call(
+                    "write_file", {"file_path": str(target), "content": "x"}, "w"
+                ),
+                done(),
+            ]
+        )
+    )
+    with mock_settings(tmp_path):
+        agent, _ = create_cli_agent(
+            model=model,
+            assistant_id="test-agent",
+            tools=[],
+            auto_approve=True,
+            cwd=tmp_path,
+            checkpointer=InMemorySaver(),
+        )
+        await agent.ainvoke(
+            {"messages": [HumanMessage(content="만들어줘")]},
+            {"configurable": {"thread_id": str(uuid.uuid4())}},
+        )
+    assert target.read_text() == "x"
+
+
+async def test_create_cli_agent_installs_gate(tmp_path: Path) -> None:
+    """G1을 실제 dcode 에이전트 조립으로 한 번 더 확인한다."""
+    target = tmp_path / "app.py"
+    model = FixedGenericFakeChatModel(
+        messages=iter(
+            [
+                tool_call(
+                    "write_file", {"file_path": str(target), "content": "x"}, "w"
+                ),
+                done(),
+            ]
+        )
+    )
+    with mock_settings(tmp_path):
+        agent, _ = create_cli_agent(
+            model=model,
+            assistant_id="test-agent",
+            tools=[],
+            auto_approve=True,
+            cwd=tmp_path,
+            checkpointer=InMemorySaver(),
+            plan_gate=make_options(tmp_path),
+        )
+        await agent.ainvoke(
+            {"messages": [HumanMessage(content="만들어줘")]},
+            {"configurable": {"thread_id": str(uuid.uuid4())}},
+        )
+    assert not target.exists()
+
+
+async def test_g18_answers_stay_and_unanswered_questions_remain(
+    tmp_path: Path,
+) -> None:
+    reviewer = FakeReviewer(
+        script=[ReviewResult((), ()), ReviewResult((), ("Q2 배포 시점은?",))]
+    )
+    h = Harness(
+        tmp_path,
+        [
+            explore(),
+            submit("s1", open_questions=["Q1 함수 이름을 바꿔도 되나?"]),
+            approval(),
+            submit("s2"),
+            submit("s3"),
+            done(),
+        ],
+        reviewer=reviewer,
+    )
+    await h.say("app.py 버그 고쳐줘")
+    await h.resume("바꾸지 마세요")
+    plan = h.plan()
+    assert (
+        "질문: Q1 함수 이름을 바꿔도 되나? / 답: 바꾸지 마세요"
+        in (plan.sections["결정 사항"])
+    )
+    assert plan.open_questions() == ("Q2 배포 시점은?",)
+
+
+async def test_g19_new_request_after_approval_needs_j4(tmp_path: Path) -> None:
+    h = await approved(
+        tmp_path,
+        [
+            write(tmp_path, "app.py", "v1"),
+            done(),
+            write(tmp_path, "app.py", "v2"),
+            done(),
+        ],
+        decider=FakeDecider(script={"J4": 0.0}),
+    )
+    await h.say("다른 것도 해줘")
+    assert (tmp_path / "app.py").read_text() == "v1"
+
+
+async def test_complete_plan_runs_test_command(tmp_path: Path) -> None:
+    h = await approved(
+        tmp_path,
+        [
+            tool_call("complete_plan", {"summary": "고침"}, "c"),
+            done(),
+        ],
+    )
+    assert "테스트 통과" in str(tool_result(h.last, "c").content)  # type: ignore[attr-defined]
+    assert h.plan().status == "done"
+    assert (await h.state())[PHASE_KEY] == "idle"
+
+
+async def test_complete_plan_keeps_plan_open_when_tests_fail(tmp_path: Path) -> None:
+    h = Harness(
+        tmp_path,
+        [
+            explore(),
+            submit(test_command="echo boom; exit 3"),
+            approval(),
+            tool_call("complete_plan", {"summary": "고침"}, "c"),
+            done(),
+        ],
+    )
+    await h.say("app.py 버그 고쳐줘")
+    result = await h.resume("승인")
+    message = tool_result(result, "c")
+    assert message.status == "error"
+    assert "boom" in str(message.content)
+    assert h.plan().status == "approved"
+    assert (await h.state())[PHASE_KEY] == "executing"
+
+
+def test_precheck_denies_only_sure_denials() -> None:
+    write_call = {"name": "write_file", "args": {"file_path": "/x"}}
+    assert precheck_denies({PHASE_KEY: "idle"}, write_call)
+    assert not precheck_denies({}, write_call)  # 게이트가 꺼져 있다
+    assert not precheck_denies({PHASE_KEY: "executing"}, write_call)
+    assert not precheck_denies(
+        {PHASE_KEY: "idle"}, {"name": "execute", "args": {"command": "ls"}}
+    )
+
+
+async def test_failed_write_does_not_extend_targets(tmp_path: Path) -> None:
+    (tmp_path / "other.py").write_text("old")
+    # 없는 문자열을 바꾸라는 edit_file은 실패한다
+    failing_edit = tool_call(
+        "edit_file",
+        {
+            "file_path": str(tmp_path / "other.py"),
+            "old_string": "missing",
+            "new_string": "new",
+        },
+        "w",
+    )
+    h = await approved(
+        tmp_path,
+        [failing_edit, done()],
+        decider=FakeDecider(script={"J4": 1.0}),
+    )
+    assert tool_result(h.last, "w").status == "error"  # type: ignore[attr-defined]
+    assert "other.py" not in h.plan().targets
+
+
+async def test_second_plan_in_thread_gets_its_own_review_rounds(
+    tmp_path: Path,
+) -> None:
+    reviewer = FakeReviewer(
+        script=[
+            ReviewResult(("의견 A",), ()),
+            ReviewResult((), ()),
+            ReviewResult(("의견 B",), ()),
+        ]
+    )
+    h = Harness(
+        tmp_path,
+        [
+            explore(),
+            submit("p1a"),
+            submit("p1b"),
+            approval(),
+            tool_call("complete_plan", {"summary": "끝"}, "c"),
+            done(),
+            explore(),
+            submit("p2", requirements="두 번째 작업"),
+            done(),
+        ],
+        reviewer=reviewer,
+    )
+    await h.say("첫 작업")
+    await h.resume("승인")
+    assert (await h.state())[PHASE_KEY] == "idle"
+    result = await h.say("두 번째 작업")
+    # 첫 계획의 회차(2)를 물려받으면 의견이 있어도 바로 reviewed가 된다
+    assert "의견 B" in str(tool_result(result, "p2").content)
+    second = max(PlanStore(tmp_path).list_ids())
+    plan = PlanStore(tmp_path).load(second)
+    assert plan.status == "draft"
+    assert plan.review_round == 1

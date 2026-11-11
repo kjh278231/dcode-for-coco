@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from langgraph.store.base import BaseStore
     from langgraph.types import Command
 
+    from deepagents_code.assistant.options import PlanGateOptions
     from deepagents_code.config import CredentialsSnapshot, ModelResult
     from deepagents_code.extensions.registry import ExtensionRegistry
     from deepagents_code.mcp_tools import MCPServerInfo
@@ -105,6 +106,7 @@ from deepagents_code.approval_mode import (
     coerce_approval_mode,
     read_approval_mode_from_store,
 )
+from deepagents_code.assistant.options import EXPLORER_SUBAGENT_NAME
 from deepagents_code.config import (
     _INHERITED_PYTHONPATH_ENV,
     DEFAULT_MODEL_RETRIES,
@@ -303,6 +305,8 @@ def _inject_fs_tools_into_subagents(
             unrestricted filesystem via `task` delegation.
     """
     for subagent in custom_subagents:
+        if subagent.get("name") == EXPLORER_SUBAGENT_NAME:
+            continue  # 탐색 서브에이전트는 읽기 도구만 가진 구성을 지킨다
         if "runnable" in subagent:
             msg = (
                 "Cannot enforce --allow-fs-tools on compiled subagent "
@@ -2167,9 +2171,13 @@ def _should_interrupt_tool_call(
     Returns:
         `True` to interrupt, or `False` for Auto/YOLO bypass.
     """
+    from deepagents_code.assistant.gate import precheck_denies
     from deepagents_code.hooks.server_middleware import hook_decided_permission
 
     tool_call = getattr(request, "tool_call", None)
+    # 계획 게이트가 어차피 거부할 호출에 승인 화면을 먼저 띄우지 않는다
+    if precheck_denies(getattr(request, "state", None), tool_call):
+        return False
     tool_call_id = str(tool_call.get("id") or "") if isinstance(tool_call, dict) else ""
     if hook_decided_permission(getattr(request, "state", None), tool_call_id):
         return False
@@ -2574,6 +2582,7 @@ def create_cli_agent(
     credentials_snapshot: CredentialsSnapshot | None = None,
     model_result: ModelResult | None = None,
     profile_overrides: dict[str, object] | None = None,
+    plan_gate: PlanGateOptions | None = None,
 ) -> tuple[Pregel[Any, Any, Any, Any], CompositeBackend]:
     """Create a CLI-configured agent with flexible options.
 
@@ -2749,6 +2758,8 @@ def create_cli_agent(
         model_result: Workspace model metadata used in the generated prompt.
         profile_overrides: Session profile fields retained when side questions
             reconstruct the selected model without a live snapshot.
+        plan_gate: Plan gate options. `None` installs nothing from
+            `deepagents_code.assistant`.
 
     Returns:
         2-tuple of `(agent_graph, backend)`
@@ -3416,6 +3427,24 @@ def create_cli_agent(
         # name, so installing both would trip `create_agent`'s duplicate-name
         # assertion. Auto mode's specialized replacement wins when active.
         agent_middleware.append(AsyncApprovalHITLMiddleware(resolved_interrupt_on))
+
+    if plan_gate is not None:
+        from deepagents_code.assistant.gate import PlanGateMiddleware
+        from deepagents_code.assistant.subagents import build_explorer_subagent
+
+        agent_middleware.append(PlanGateMiddleware(plan_gate, composite_backend))
+        if any(s.get("name") == EXPLORER_SUBAGENT_NAME for s in custom_subagents):
+            msg = (
+                f"Subagent name {EXPLORER_SUBAGENT_NAME!r} is reserved by the plan "
+                "gate. Rename the user subagent, or set DEEPAGENTS_CODE_PLAN_GATE=0."
+            )
+            raise ValueError(msg)
+        custom_subagents.append(
+            build_explorer_subagent(
+                composite_backend,
+                _subagent_cli_middleware(has_explicit_model=False),
+            )
+        )
 
     # Server-owned Hooks v2 lifecycle events (Pre/Post tool, Stop, subagent).
     # Gated at runtime by `hooks_server_events` on the per-run context so idle

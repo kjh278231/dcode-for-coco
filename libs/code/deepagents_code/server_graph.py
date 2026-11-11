@@ -52,16 +52,19 @@ from deepagents_code.workspace_diagnostics import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Mapping
+    from collections.abc import Awaitable, Callable, Mapping, Sequence
     from contextlib import AbstractContextManager
 
     from deepagents.backends.composite import CompositeBackend
     from deepagents.backends.protocol import SandboxBackendProtocol
+    from langchain_core.language_models import BaseChatModel
+    from langchain_core.tools import BaseTool
 
     EnvironmentContext = Callable[
         [Mapping[str, str] | None], AbstractContextManager[None]
     ]
 
+    from deepagents_code.assistant.options import PlanGateOptions
     from deepagents_code.config import CredentialsSnapshot
     from deepagents_code.extensions.registry import ExtensionRegistry
     from deepagents_code.mcp_tools import MCPServerInfo
@@ -339,6 +342,50 @@ class ServerRuntime(NamedTuple):
     """Immutable workspace environment shared by metadata resolution and inference."""
 
 
+def _build_plan_gate_options(
+    config: ServerConfig,
+    *,
+    model: BaseChatModel,
+    project_root: Path | None,
+    mcp_tools: Sequence[BaseTool],
+    environ: Mapping[str, str],
+) -> PlanGateOptions | None:
+    """서버 설정으로 계획 게이트 옵션을 만든다.
+
+    Args:
+        config: 서버 설정.
+        model: 세션의 주 모델. 리뷰어가 쓴다.
+        project_root: 프로젝트 루트.
+        mcp_tools: 불러온 MCP 도구.
+        environ: 워크스페이스 환경.
+
+    Returns:
+        게이트가 꺼져 있으면 None.
+
+    Raises:
+        RuntimeError: 게이트가 켜졌는데 프로젝트 루트가 없을 때.
+    """
+    if not config.plan_gate:
+        return None
+    if project_root is None:
+        msg = "plan gate needs a project root"
+        raise RuntimeError(msg)
+    from deepagents_code.assistant.decider import JevDecider
+    from deepagents_code.assistant.options import PlanGateOptions
+    from deepagents_code.assistant.reviewer import PlanReviewer
+    from deepagents_code.auto_mode import gated_mcp_tool_names
+
+    decider = JevDecider.from_environment(environ)
+    return PlanGateOptions(
+        project_root=project_root.resolve(),
+        decider=decider,
+        reviewer=PlanReviewer(model),
+        interactive=config.interactive,
+        mcp_mutating_tool_names=frozenset(gated_mcp_tool_names(mcp_tools)),
+        threshold=decider.threshold,
+    )
+
+
 async def _make_graphs(
     *,
     config_override: ServerConfig | None = None,
@@ -557,7 +604,20 @@ async def _make_graphs_in_environment(
             else None
         )
 
+        project_dir = (
+            project_context.project_root or project_context.user_cwd
+            if project_context is not None
+            else config.cwd
+        )
+        plan_gate = _build_plan_gate_options(
+            config,
+            model=result.model,
+            project_root=Path(project_dir) if project_dir is not None else None,
+            mcp_tools=mcp_tools,
+            environ=workspace_env,
+        )
         agent, composite_backend = create_cli_agent(
+            plan_gate=plan_gate,
             model=result.model,
             assistant_id=config.assistant_id,
             tools=tools,

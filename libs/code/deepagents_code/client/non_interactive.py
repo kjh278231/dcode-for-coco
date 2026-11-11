@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sys
 import threading
 import time
@@ -68,6 +69,7 @@ from deepagents_code._tool_stream import (
 from deepagents_code._tracing import stream_trace_config
 from deepagents_code._version import __version__
 from deepagents_code.agent import DEFAULT_AGENT_NAME
+from deepagents_code.assistant.options import plan_gate_enabled
 from deepagents_code.config import (
     SHELL_ALLOW_ALL,
     build_langsmith_thread_url,
@@ -3095,6 +3097,7 @@ async def run_non_interactive(
                 sandbox_setup=sandbox_setup,
                 enable_shell=enable_shell,
                 enable_ask_user=False,
+                plan_gate=plan_gate_enabled(os.environ),
                 enable_interpreter=enable_interpreter,
                 interpreter_ptc=interpreter_ptc,
                 interpreter_ptc_acknowledge_unsafe=interpreter_ptc_acknowledge_unsafe,

@@ -338,19 +338,23 @@ def question_j3(plan: Plan) -> tuple[str, Noul]:
     )
 
 
-def question_j4(plan: Plan, tool_name: str, summary: str) -> tuple[str, Noul]:
+def question_j4(
+    plan: Plan, tool_name: str, summary: str, request: str = ""
+) -> tuple[str, Noul]:
     """이 호출이 승인된 계획 범위 안인가.
 
     Args:
         plan: 승인된 계획.
         tool_name: 호출할 도구 이름.
         summary: 경로와 명령만 담은 호출 요약.
+        request: 승인 뒤에 온 새 요청문. 승인받은 요청 안이면 빈 문자열.
 
     Returns:
         (state, 질문).
     """
     state = _state(
         f"## 도구 호출\n{tool_name}: {summary}",
+        f"## 승인 뒤에 온 새 요청\n{request}" if request else "",
         _targets(plan),
         _section(plan, "작업 범위"),
         _section(plan, "요구사항"),

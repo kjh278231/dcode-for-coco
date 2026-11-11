@@ -132,6 +132,7 @@ class _Profile:
             "HOME": str(self.home),
             "DEEPAGENTS_HOME": str(self.profile),
             "DEEPAGENTS_CODE_NO_UPDATE_CHECK": "1",
+            "DEEPAGENTS_CODE_PLAN_GATE": "0",
         }
 
     def dcode(self, *args: str, cwd: Path | None = None) -> _Run:

@@ -316,6 +316,7 @@ async def start_server_and_get_agent(
     sandbox_setup: str | None = None,
     enable_shell: bool = True,
     enable_ask_user: bool = False,
+    plan_gate: bool = False,
     enable_interpreter: bool | None = None,
     interpreter_ptc: str | list[str] | None = None,
     interpreter_ptc_acknowledge_unsafe: bool = False,
@@ -353,6 +354,7 @@ async def start_server_and_get_agent(
         sandbox_setup: Path to setup script for the sandbox.
         enable_shell: Enable shell execution tools.
         enable_ask_user: Enable ask_user tool.
+        plan_gate: Install the plan gate on the main agent.
         enable_interpreter: Enable the JS interpreter (`js_eval`) middleware on
             the main agent. `None` uses the sandbox-aware default.
         interpreter_ptc: Invocation-scoped PTC allowlist override.
@@ -423,6 +425,7 @@ async def start_server_and_get_agent(
         sandbox_setup=sandbox_setup,
         enable_shell=enable_shell,
         enable_ask_user=enable_ask_user,
+        plan_gate=plan_gate,
         enable_interpreter=enable_interpreter,
         interpreter_ptc=interpreter_ptc,
         interpreter_ptc_acknowledge_unsafe=interpreter_ptc_acknowledge_unsafe,
@@ -604,6 +607,7 @@ async def server_session(
     sandbox_setup: str | None = None,
     enable_shell: bool = True,
     enable_ask_user: bool = False,
+    plan_gate: bool = False,
     enable_interpreter: bool | None = None,
     interpreter_ptc: str | list[str] | None = None,
     interpreter_ptc_acknowledge_unsafe: bool = False,
@@ -643,6 +647,7 @@ async def server_session(
         sandbox_setup: Path to setup script for the sandbox.
         enable_shell: Enable shell execution tools.
         enable_ask_user: Enable ask_user tool.
+        plan_gate: Install the plan gate on the main agent.
         enable_interpreter: Enable the JS interpreter (`js_eval`) middleware on
             the main agent. `None` uses the sandbox-aware default.
         interpreter_ptc: Invocation-scoped PTC allowlist override.
@@ -692,6 +697,7 @@ async def server_session(
             sandbox_setup=sandbox_setup,
             enable_shell=enable_shell,
             enable_ask_user=enable_ask_user,
+            plan_gate=plan_gate,
             enable_interpreter=enable_interpreter,
             interpreter_ptc=interpreter_ptc,
             interpreter_ptc_acknowledge_unsafe=interpreter_ptc_acknowledge_unsafe,

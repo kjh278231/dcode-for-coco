@@ -46,6 +46,7 @@ SESSION_WORKSPACE_FIELDS = frozenset(
         "interpreter_ptc_acknowledge_unsafe",
         "interrupt_shell_only",
         "no_mcp",
+        "plan_gate",
         "recursion_limit",
         "sandbox_id",
         "sandbox_snapshot_name",
@@ -453,6 +454,9 @@ class ServerConfig:
     enable_ask_user: bool = False
     """Enable the `ask_user` tool that lets the agent prompt the user mid-run."""
 
+    plan_gate: bool = False
+    """Install the plan gate (`deepagents_code.assistant`) on the main agent."""
+
     enable_memory: bool = True
     """Enable the long-term memory subsystem."""
 
@@ -577,6 +581,7 @@ class ServerConfig:
             "interactive": self.interactive,
             "enable_shell": self.enable_shell,
             "enable_ask_user": self.enable_ask_user,
+            "plan_gate": self.plan_gate,
             "enable_memory": self.enable_memory,
             "enable_skills": self.enable_skills,
             "enable_interpreter": self.enable_interpreter,
@@ -834,6 +839,7 @@ class ServerConfig:
             "INTERACTIVE": str(self.interactive).lower(),
             "ENABLE_SHELL": str(self.enable_shell).lower(),
             "ENABLE_ASK_USER": str(self.enable_ask_user).lower(),
+            "PLAN_GATE": str(self.plan_gate).lower(),
             "ENABLE_MEMORY": str(self.enable_memory).lower(),
             "ENABLE_SKILLS": str(self.enable_skills).lower(),
             "ENABLE_INTERPRETER": str(self.enable_interpreter).lower(),
@@ -908,6 +914,7 @@ class ServerConfig:
             interactive=_read_env_bool("INTERACTIVE", default=True),
             enable_shell=_read_env_bool("ENABLE_SHELL", default=True),
             enable_ask_user=_read_env_bool("ENABLE_ASK_USER"),
+            plan_gate=_read_env_bool("PLAN_GATE"),
             enable_memory=_read_env_bool("ENABLE_MEMORY", default=True),
             enable_skills=_read_env_bool("ENABLE_SKILLS", default=True),
             enable_interpreter=_read_env_bool("ENABLE_INTERPRETER"),
@@ -957,6 +964,7 @@ class ServerConfig:
         sandbox_setup: str | None,
         enable_shell: bool,
         enable_ask_user: bool,
+        plan_gate: bool = False,
         enable_interpreter: bool | None = None,
         interpreter_ptc: str | list[str] | None = None,
         interpreter_ptc_acknowledge_unsafe: bool = False,
@@ -999,6 +1007,7 @@ class ServerConfig:
             sandbox_setup: Path to setup script for the sandbox.
             enable_shell: Enable shell execution tools.
             enable_ask_user: Enable ask_user tool.
+            plan_gate: Install the plan gate on the main agent.
             enable_interpreter: Enable `CodeInterpreterMiddleware` on the main
                 agent. `None` uses the sandbox-aware default.
             interpreter_ptc: Invocation-scoped PTC allowlist override.
@@ -1043,6 +1052,7 @@ class ServerConfig:
             interactive=interactive,
             enable_shell=enable_shell,
             enable_ask_user=enable_ask_user,
+            plan_gate=plan_gate,
             enable_interpreter=resolved_enable_interpreter,
             interpreter_ptc=interpreter_ptc,
             interpreter_ptc_acknowledge_unsafe=interpreter_ptc_acknowledge_unsafe,

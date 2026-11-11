@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal, get_args
 from deepagents_code.assistant import frontmatter
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
     from datetime import datetime
 
 PlanStatus = Literal["draft", "reviewed", "approved", "done", "failed", "rejected"]
@@ -324,3 +324,22 @@ class PlanStore:
         return sorted(
             p.stem for p in self.directory.glob("*.md") if not p.name.startswith(".")
         )
+
+
+def record_answers(plan: Plan, pairs: Sequence[tuple[str, str]]) -> Plan:
+    """사람의 답을 "결정 사항"에 덧붙이고 "미결 질문"을 비운다.
+
+    Args:
+        plan: 질문이 있던 계획.
+        pairs: (질문, 답) 목록.
+
+    Returns:
+        갱신된 Plan.
+    """
+    sections = dict(plan.sections)
+    decided = sections.get("결정 사항", "").strip()
+    lines = [] if decided in {"", EMPTY_MARK} else [decided]
+    lines.extend(f"- 질문: {q} / 답: {a}" for q, a in pairs)
+    sections["결정 사항"] = "\n".join(lines)
+    sections[_OPEN_QUESTIONS_SECTION] = EMPTY_MARK
+    return plan.with_updates(sections=_order_sections(sections))

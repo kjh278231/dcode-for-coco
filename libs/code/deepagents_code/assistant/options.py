@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
+from deepagents_code._env_vars import PLAN_GATE
+
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
     # decider와 reviewer가 이 모듈을 import하므로 타입 검사 때만 가져온다
@@ -43,6 +46,16 @@ PROTECTED_DIRS: tuple[str, ...] = (
 
 Phase = Literal["idle", "planning", "awaiting_approval", "executing"]
 
+# 게이트 상태 키. gate와 tools가 서로를 import하지 않고 같이 쓴다
+PHASE_KEY = "_cg_phase"
+PLAN_ID_KEY = "_cg_plan_id"
+REVIEW_ROUND_KEY = "_cg_review_round"
+EXPLORED_KEY = "_cg_explored"
+NEEDS_CHANGE_KEY = "_cg_needs_change"
+LAST_HUMAN_ID_KEY = "_cg_last_human_id"
+APPROVED_HUMAN_ID_KEY = "_cg_approved_human_id"
+REQUEST_TEXT_KEY = "_cg_request_text"
+
 
 @dataclass(frozen=True, slots=True)
 class PlanGateOptions:
@@ -54,3 +67,15 @@ class PlanGateOptions:
     interactive: bool
     mcp_mutating_tool_names: frozenset[str] = frozenset()
     threshold: float = JEV_THRESHOLD_DEFAULT
+
+
+def plan_gate_enabled(environ: Mapping[str, str]) -> bool:
+    """게이트 끄기 스위치를 읽는다.
+
+    Args:
+        environ: 환경변수 사전.
+
+    Returns:
+        `DEEPAGENTS_CODE_PLAN_GATE`가 `0`이나 `false`가 아니면 True.
+    """
+    return environ.get(PLAN_GATE, "").strip().lower() not in {"0", "false"}

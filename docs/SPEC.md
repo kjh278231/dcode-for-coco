@@ -1,6 +1,6 @@
 # dcode 기반 Coding Assistant 구현 명세
 
-상태: M2까지 구현 (2026-11-11). 진행과 명세에서 벗어난 점은 `PROGRESS.md`에 적는다. 결정의 배경은 `docs/DESIGN.md`에 있다. 두 문서가 다르면 이 문서가 맞다.
+상태: M3까지 구현 (2026-11-11). 진행과 명세에서 벗어난 점은 `PROGRESS.md`에 적는다. 결정의 배경은 `docs/DESIGN.md`에 있다. 두 문서가 다르면 이 문서가 맞다.
 
 이 문서는 구현자가 추측 없이 만들 수 있도록 쓴다. 메서드마다 시그니처, 계약, 단계, 실패 동작을 적고 본문 코드는 적지 않는다.
 
@@ -96,6 +96,9 @@ libs/code/tests/unit_tests/assistant/
 | `DC/server_graph.py` | `create_cli_agent`에 옵션 전달, `make_graph`에 Langfuse 핸들러 | M3, M6 |
 | `DC/agent.py` | `create_cli_agent` 인자, 미들웨어와 서브에이전트 등록, 승인 술어 | M3, M4 |
 | `DC/main.py` | 키 사전 검사, LangSmith 기본 끄기 | M3, M6 |
+| `DC/client/non_interactive.py` | `server_session` 호출에 `plan_gate` 전달 | M3 |
+| `libs/code/scripts/check_process_cwd.py` | `run_non_interactive`의 `Path.cwd` 허용 항목 토큰 `99c1d085` → `86fa45ed` (사유 문구 그대로). 같은 문장에 `plan_gate=`를 더해 토큰이 바뀌었다 | M3 |
+| `scripts/smoke_dcode.sh`, `tests/integration_tests/test_headless_resume.py` | `DEEPAGENTS_CODE_PLAN_GATE=0` | M3 |
 | `DC/config.py` | `build_stream_config`에 Langfuse metadata | M6 |
 | `DC/command_registry.py` | `/improve`, `/runs` 등록, `/trace` 설명 변경 | M7 |
 | `DC/app.py` | `/improve`, `/runs` 처리기, `/trace`와 `/remember` 교체 | M5, M7 |
@@ -545,9 +548,11 @@ class PlanReviewer:
 도구 다섯 개를 만든다. 대화형과 비대화형에서 등록되는 도구 집합은 같고, `request_plan_approval`과 `propose_rule`의 동작만 다르다.
 
 ```python
-def build_plan_tools(options: PlanGateOptions) -> list[BaseTool]:
-    """계획 도구 다섯 개를 만든다. PlanGateMiddleware.tools가 이 목록을 쓴다."""
+def build_plan_tools(options: PlanGateOptions, backend: BackendProtocol) -> list[BaseTool]:
+    """계획 도구를 만든다. PlanGateMiddleware.tools가 이 목록을 쓴다."""
 ```
+
+[M3] `backend`는 `complete_plan`이 `test_command`를 돌리는 데 쓴다. `submit_plan`과 `complete_plan`은 비동기 구현만 있다 (`PlanReviewer`가 `areview`만 있다). `request_plan_approval`은 둘 다 있다. 비동기 판은 파일 읽기와 쓰기를 `asyncio.to_thread`로 돌리고 `interrupt()`는 이벤트 루프에서 부른다.
 
 도구는 `ToolRuntime`으로 상태를 읽고 `Command(update=...)`로 상태와 `ToolMessage`를 함께 돌려준다. 본보기는 `DC/ask_user.py:368` `_ask_user`다.
 
@@ -573,7 +578,8 @@ def submit_plan(
     # 2) phase가 awaiting_approval이면 거부: "사람의 답을 기다리는 중이다"
     #    phase가 executing이면 재검토로 본다: 기존 plan_id를 유지하고 status를 draft로 되돌린다
     # 3) explored가 False면 거부: "먼저 task(subagent_type='explorer')로 탐색하라"
-    # 4) plan_id가 없으면 new_plan_id로 만든다
+    # 4) phase가 idle이면(끝났거나 거부된 뒤) new_plan_id로 새 계획을 만든다. 아니면 상태의 plan_id
+    #    phase가 idle(새 계획)이나 executing(승인 뒤 재검토)이면 review_round를 0에서 센다 [M3]
     # 5) Plan을 만들고 validate_plan을 돌린다
     # 6) 형식 문제가 없으면 decider.judge로 J1~J3을 한 번에 묻는다
     #    형식 문제가 있으면 Jev를 부르지 않는다
@@ -590,8 +596,8 @@ def submit_plan(
 
 | 조건 | plan.status | phase | 도구 결과가 모델에게 말하는 것 |
 |---|---|---|---|
-| 형식 문제가 있다 | draft | planning | 문제 목록. 고쳐서 다시 제출하라 |
-| 의견이 있고 회차가 `MAX_REVIEW_ROUNDS` 미만이다 | draft | planning | 의견 목록. 반영해서 다시 제출하라 |
+| 형식 문제가 있다 | draft | planning | 문제 목록. 고쳐서 다시 제출하라. 도구 결과 status는 `error` |
+| 의견이 있고 회차가 `MAX_REVIEW_ROUNDS` 미만이다 | draft | planning | 의견 목록. 반영해서 다시 제출하라. 정상 흐름이라 status는 `success` [M3] |
 | 그 밖 (의견이 없거나, 회차가 상한이거나, 리뷰 실패) | reviewed | planning | `request_plan_approval`을 불러라 |
 
 회차가 상한에 닿았는데 의견이 남으면 그 의견은 계획 파일의 "리뷰 기록"에 남아 사람에게 보인다.
@@ -616,7 +622,7 @@ def request_plan_approval(
     # 6) 계획 파일과 상태를 갱신하고 Command를 돌려준다
 ```
 
-**멈춤 신호의 모양.** [확인] TUI는 신호의 `type`이 `"ask_user"`인지와 `AskUserRequest` 모양만 본다 (`DC/tui/textual_adapter.py:2701`). 어느 도구가 냈는지는 보지 않는다. 질문 본문은 마크다운으로 그려진다 (`DC/tui/widgets/ask_user.py:786`). 그래서 TUI를 고치지 않고 계획 승인 화면을 띄운다.
+**멈춤 신호의 모양.** [실행 확인, M3: `test_textual_adapter`의 가짜 스트림과 실제 TUI]  TUI는 신호의 `type`이 `"ask_user"`인지와 `AskUserRequest` 모양만 본다 (`DC/tui/textual_adapter.py:2701`). 어느 도구가 냈는지는 보지 않는다. 질문 본문은 마크다운으로 그려진다 (`DC/tui/widgets/ask_user.py:786`). 그래서 TUI를 고치지 않고 계획 승인 화면을 띄운다.
 
 ```python
 # 승인 모드
@@ -672,7 +678,7 @@ def complete_plan(
 
 테스트 통과를 모델의 주장이 아니라 게이트가 실행한 결과로 기록한다. 평가 4-1의 "테스트"와 "최종 결과"가 이 구간이다.
 
-[미확인] `test_command`를 게이트 코드가 백엔드로 실행하는 정확한 호출(동기인지 비동기인지, 반환 타입)은 M3에서 `SDK/backends/`의 `execute` 시그니처를 읽고 확정한다.
+[실행 확인, M3] `await backend.aexecute(test_command, timeout=600)`. 반환은 `ExecuteResponse(output, exit_code, truncated)`. 셸이 없는 백엔드는 `NotImplementedError`를 내고, 이것과 `exit_code`가 0이 아닌 경우(None 포함)를 실패로 본다.
 
 #### `propose_rule`, `propose_improvement`
 
@@ -700,6 +706,8 @@ class PlanGateState(AgentState):
 `_merge_counters`는 사전의 키별로 더하는 리듀서다. 훅은 증가분만 돌려준다. 값을 0으로 되돌릴 때는 `{"__reset__": 1}`을 돌려주고 리듀서가 빈 사전으로 바꾼다.
 
 [확인] `PrivateStateAttr`가 붙은 필드는 서브에이전트로 넘어가지 않고 서브에이전트에서 돌아오지도 않는다 (`SDK/middleware/subagents.py:785`, `:853`). 서브에이전트가 단계를 `executing`으로 바꿔 돌려주는 길이 막힌다. 선언 본보기는 `DC/local_context.py:718`이다.
+
+[M3] `_cg_counters`와 카운터 갱신, `aafter_agent`는 M6에서 `tracing.py`와 함께 넣는다. M3 게이트에는 없다.
 
 `_cg_counters`의 키는 `tool_calls`, `tool_errors`, `gate_denies`, `jev_denies`, `test_failures`, `repeat_failures`다. 요청이 시작될 때 0으로 되돌린다.
 
@@ -756,7 +764,7 @@ class PlanGateMiddleware(AgentMiddleware):
 |---|---|
 | `APPROVE_WORDS`에 있고 계획에 미결 질문이 없다 | 계획 status=approved, phase=executing |
 | `REJECT_WORDS`에 있다 | 계획 status=rejected, phase=idle |
-| 그 밖 | 미결 질문이 있으면 답으로 보고 "결정 사항"에 적는다. phase=planning, review_round=0 |
+| 그 밖 | 미결 질문이 있으면 답으로 보고 "결정 사항"에 적는다 (메시지 하나를 질문 전부의 답으로 한 줄에 적는다 [M3]). phase=planning, review_round=0 |
 
 이 해석은 `options.interactive`가 False일 때만 한다. 대화형에서 phase가 `awaiting_approval`인 채로 새 메시지가 오는 경우는 없어야 한다. 있으면 phase를 `planning`으로 되돌린다.
 
@@ -789,8 +797,9 @@ class PlanGateMiddleware(AgentMiddleware):
    deny면 거부 메시지를 만든다 (handler를 부르지 않는다)
    needs_scope_check면:
      a) 계획을 읽고 decider.judge(J4)를 to_thread로 부른다
-     b) 통과면 handler를 부른다. WRITE_PATH_TOOLS였으면 targets에 경로를 추가하고
+     b) 통과면 handler를 부른다. WRITE_PATH_TOOLS였고 결과가 오류가 아니면 targets에 경로를 추가하고
         PlanStore.save, tracing.span("cg.scope.extend")
+        [M3] 추가는 handler 뒤에 한다. 계획을 다시 읽고 미들웨어의 잠금 안에서 저장해 병렬 쓰기가 서로의 대상을 덮지 않는다
      c) 통과 못 하면 거부한다. 사유 out_of_scope. counters.jev_denies를 1 올린다
         메시지: "승인된 계획의 범위 밖이다. 필요하면 submit_plan으로 계획을 고쳐 재검토를 받아라"
 6) 결과가 오류 상태이면 counters.tool_errors를 1 올린다
@@ -809,6 +818,8 @@ ToolMessage(content=<사유 문장>, name=request.tool_call["name"],
 카운터를 상태에 싣는 방법. `handler`의 결과는 `ToolMessage`이거나 `Command`다. `ToolMessage`이면 `Command(update={"messages": [msg], "_cg_counters": 새 값})`로 감싼다. `Command`이면 `update`에 `_cg_counters`를 더한 새 `Command`를 만든다.
 
 [실행 확인] `awrap_tool_call`이 `Command(update=...)`를 돌려주면 상태가 갱신된다. 한 단계에서 도구 둘이 병렬로 거부됐을 때 덧셈 리듀서가 붙은 값이 2가 됐다. 거부된 도구의 본문은 실행되지 않았다. 도구 안의 `interrupt`와 재개도 이 훅을 거쳐 동작했다. `PrivateStateAttr` 값은 실행 결과에 나오지 않았다. 실험은 `Day09/.venv`에서 `create_agent`, `_ToolBindingFakeModel`, `InMemorySaver`로 했다. 리듀서 본보기는 `DC/auto_mode.py:674` `_merge_temp_artifacts`다.
+
+[M3] J4의 새 요청문은 `question_j4(plan, tool_name, summary, request="")`의 선택 인자로 넘긴다.
 
 **승인의 유효 범위.** [제안] 승인은 승인받은 요청 안에서만 `targets` 지름길을 연다. `_cg_last_human_id`가 `_cg_approved_human_id`와 다르면(승인 뒤에 사용자가 새 메시지를 보냈으면) `classify_call`에 `fresh_approval=False`를 넘긴다. 그러면 `targets` 안의 쓰기도 J4를 거친다. J4의 state에는 계획과 새 요청문을 함께 넣는다. 이유는 이렇다. 작업이 `complete_plan` 없이 끝나면 phase가 `executing`으로 남는다. 다음에 온 무관한 요청이 옛 `targets`를 계획도 판정도 없이 고칠 수 있으면 안 된다.
 
@@ -919,7 +930,7 @@ if plan_gate is not None:
 
 이 함수는 사용자 정의 서브에이전트와 `general-purpose` 양쪽에 쓰이므로 한 곳에서 모두 덮인다.
 
-탐색 서브에이전트는 `composite_backend`가 만들어진 뒤에 `custom_subagents`에 더한다. `_inject_fs_tools_into_subagents` 호출 (`:3619`) 앞이다.
+탐색 서브에이전트는 `composite_backend`가 만들어진 뒤에 `custom_subagents`에 더한다. [M3] 게이트가 켜져 있는데 사용자 서브에이전트 이름이 `explorer`이면 `ValueError`로 서버 기동을 멈춘다. 메시지는 이름을 바꾸거나 `DEEPAGENTS_CODE_PLAN_GATE=0`을 쓰라고 말한다. SDK의 "Duplicate subagent name"보다 원인이 분명하다. `_inject_fs_tools_into_subagents` 호출 (`:3619`) 앞이다.
 
 **`--allow-fs-tools` 충돌.** [확인] 이 옵션이 켜지면 `_inject_fs_tools_into_subagents` (`DC/agent.py:288`)가 모든 서브에이전트의 미들웨어 끝에 `FilesystemMiddleware`를 덧붙여 탐색 서브에이전트의 읽기 전용 구성을 덮는다. 이 함수에서 이름이 `EXPLORER_SUBAGENT_NAME`인 사양은 건너뛰게 고친다.
 
@@ -930,7 +941,7 @@ if precheck_denies(request.state, request.tool_call):
     return False
 ```
 
-`precheck_denies`는 `gate.py`의 모듈 함수다. 상태에 `_cg_phase`가 없으면(게이트가 꺼져 있으면) False다. 있으면 `policy.classify_call`이 `deny`인지 본다. Jev가 필요한 경우는 False로 둔다. 그 경우 사용자가 승인한 뒤 J4가 거부할 수 있고, 그것은 받아들인다.
+`precheck_denies`는 `gate.py`의 모듈 함수다. 상태에 `_cg_phase`가 없으면(게이트가 꺼져 있으면) False다. [M3] 승인 술어에서는 프로젝트 루트를 알 수 없어서 `classify_call`을 부르지 않고, 루트 없이 확정되는 거부만 True로 한다. phase가 executing이 아니고 도구가 `WRITE_PATH_TOOLS | OTHER_MUTATING_TOOLS`인 경우다. `execute`, MCP, 승인 뒤의 보호 경로는 승인 화면을 거친 뒤 게이트가 거부한다. Jev가 필요한 경우는 False로 둔다. 그 경우 사용자가 승인한 뒤 J4가 거부할 수 있고, 그것은 받아들인다.
 
 **승인 모드와의 관계.** 계획 게이트는 `--yolo`, 자동 승인, 세션 중 "항상 승인"과 무관하게 동작한다. 그 모드들은 도구별 승인 화면만 줄인다.
 
@@ -969,7 +980,7 @@ def _build_plan_gate_options(config: ServerConfig, *, model: BaseChatModel, proj
 
 환경은 `os.environ`이 아니라 `active_environment()` (`DC/config.py:575`)로 읽는다. 프로젝트 루트는 `project_context.project_root or project_context.user_cwd`다 (`DC/server_graph.py:266`의 관례). [확인] git 저장소가 아니면 `find_project_root`가 None이다.
 
-[미확인] 모델 객체를 `create_cli_agent` 밖에서 얻을 수 있는지. 안 되면 `PlanGateOptions.reviewer`를 `create_cli_agent` 안에서 채우도록 옵션을 "판정기와 설정"까지만 담게 바꾼다. M3에서 정한다.
+[실행 확인, M3] 모델 객체는 `server_graph`의 `result.model`(`create_model`의 결과)로 `create_cli_agent` 밖에서 얻는다. 환경은 `workspace_env`를 쓴다. 프로젝트 루트는 `project_context.project_root or project_context.user_cwd`이고, `project_context`가 None이면 `config.cwd`로 물러선다. 셋 다 없으면 `RuntimeError`.
 
 **키 사전 검사.** `DC/main.py`의 서브커맨드 분기 시작 (`:6571` `if args.command == "help":`) 바로 앞에 넣는다.
 
@@ -1772,6 +1783,8 @@ G1과 G5는 README의 T4와 T3에 대응한다.
 
 업스트림 테스트는 고치지 않는다. 지우거나 건너뛰게 표시하지 않는다. 우리 변경으로 깨지는 테스트가 있으면 13장의 절차를 따른다.
 
+`scripts/check_process_cwd.py`의 허용 목록은 테스트가 아니라 검사 자료다. 우리 변경이 `Path.cwd()`가 든 문장을 바꿔 토큰만 달라지면, 사용자 승인을 받고 토큰을 바꾼다 (M3에서 한 번: `run_non_interactive`, `99c1d085` → `86fa45ed`).
+
 고쳐도 되는 경우는 셋이다. 삭제한 remember 스킬을 직접 검사하는 테스트, 명령 목록이나 `ProjectPaths` 필드 수를 고정값으로 단언하는 테스트, `dcode`를 서브프로세스로 띄우는 통합 테스트(`tests/integration_tests/` 아래)의 환경변수 사전에 `DEEPAGENTS_CODE_PLAN_GATE=0`을 더하는 것. 세 번째는 테스트의 단언을 바꾸지 않는다. 고친 테스트와 이유를 README에 적는다.
 
 [확인] pytest 설정은 예상하지 못한 경고를 실패로 처리한다 (`pyproject.toml:363` `filterwarnings = ["error", ...]`). 단위 테스트는 소켓이 막힌다 (`Makefile:23`의 `--disable-socket`). Jev와 Langfuse를 부르는 코드는 테스트에서 가짜로 바꿔야 한다. `langfuse`는 `tracing.py` 안에서만, 함수 안에서 늦게 import한다. 모듈 상단에서 import하지 않는다.
@@ -1825,9 +1838,15 @@ G1과 G5는 README의 T4와 T3에 대응한다.
 
 검사: 9.3절의 G1~G11, G14~G19 통과. 기준선의 단위 테스트가 그대로 통과. TUI에서 실제 모델로 한 번 돌려 승인 화면이 뜨는지 눈으로 확인.
 
+[실행 확인, M3] 탐색 서브에이전트(`subagents.py`, `create_cli_agent` 등록, `_inject_fs_tools_into_subagents`에서 건너뛰기)를 M3로 당겼다. 없으면 `task(explorer)`가 "does not exist" 문자열을 돌려주고 게이트가 그것을 탐색 결과로 받는다. 사용자가 확정했다.
+
+M3에서 확인한 열린 길 (M4에서 닫는다): 승인 뒤(phase executing) 게이트는 `task`를 `targets`와 J4 없이 통과시킨다 (`gate.py`의 `_decide`). 사용자 정의 선언형 서브에이전트와, `DEEPAGENTS_CODE_FORKED_SUBAGENTS=0`일 때의 `general-purpose`는 부모 게이트를 물려받지 않아 범위 밖 파일을 쓸 수 있다. M4의 `SubagentWriteBlockMiddleware`가 이 길을 닫는다.
+
+M3에서 미룬 것: `_cg_counters`와 `aafter_agent`는 소비자인 `tracing.py`와 함께 M6. `propose_rule`은 M5, `propose_improvement`는 M7.
+
 ### M4. 서브에이전트
 
-`SubagentWriteBlockMiddleware`, `subagents.py`, `_subagent_cli_middleware`와 `_inject_fs_tools_into_subagents` 수정.
+`SubagentWriteBlockMiddleware`, `_subagent_cli_middleware` 수정. 탐색 서브에이전트와 `_inject_fs_tools_into_subagents` 수정은 M3에서 했다.
 
 먼저 확인할 [미확인]: fork 서브에이전트의 최종 도구 목록.
 

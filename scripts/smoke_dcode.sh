@@ -41,7 +41,8 @@ echo "dcode -n 실행 중 (가짜 모델, API 호출 없음)..."
 # -n 모드는 표준 입력이 터미널이 아니면 입력을 끝까지 읽는다(main.py의 stdin 처리).
 # 스크립트에서는 < /dev/null 로 닫아 주어야 멈추지 않는다.
 set +e
-(cd "$WORK/project" && HOME="$WORK/home" DEEPAGENTS_HOME="$WORK/profile" \
+# 가짜 모델 점검이라 계획 게이트와 Jev 키 검사를 끈다 (SPEC 3.10 끄기 스위치).
+(cd "$WORK/project" && HOME="$WORK/home" DEEPAGENTS_HOME="$WORK/profile" DEEPAGENTS_CODE_PLAN_GATE=0 \
   "$DCODE" -n "$MESSAGE" --no-tracing --no-mcp < /dev/null > "$WORK/stdout.txt" 2> "$WORK/stderr.txt")
 code=$?
 set -e
