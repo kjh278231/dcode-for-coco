@@ -41,6 +41,8 @@ GATE_BASE: str = f"""\
 5. 승인되면 계획의 targets 안에서 작업하고, 끝나면 complete_plan을 부른다.
 6. 계획에 없는 파일을 고쳐야 하면 submit_plan으로 계획을 고친다.
 7. .deepagents/plans, .deepagents/memory는 직접 고치지 않는다.
+8. 저장소에 계속 적용할 규칙을 알게 되면 propose_rule로 제안한다.
+   사람이 확인해야 저장된다.
 
 계획의 "미결 질문" 절에는 아래 기준에 해당하는 것만 적는다.
 

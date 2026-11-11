@@ -17,6 +17,7 @@ from deepagents_code._env_vars import EXPERIMENTAL
 from deepagents_code.agent import create_cli_agent
 from deepagents_code.assistant.decider import FakeDecider
 from deepagents_code.assistant.gate import PlanGateMiddleware, precheck_denies
+from deepagents_code.assistant.memory import MemoryStore
 from deepagents_code.assistant.options import PHASE_KEY
 from deepagents_code.assistant.plan import PlanStore
 from deepagents_code.assistant.reviewer import ReviewResult
@@ -456,6 +457,9 @@ async def test_complete_plan_runs_test_command(tmp_path: Path) -> None:
     )
     assert "테스트 통과" in str(tool_result(h.last, "c").content)  # type: ignore[attr-defined]
     assert h.plan().status == "done"
+    (record,) = MemoryStore(tmp_path).list_records("work")
+    assert record.name == f"work-{h.plan().id}"
+    assert "## 결과\n고침" in record.body
     assert (await h.state())[PHASE_KEY] == "idle"
 
 
@@ -477,6 +481,7 @@ async def test_complete_plan_keeps_plan_open_when_tests_fail(tmp_path: Path) -> 
     assert "boom" in str(message.content)
     assert h.plan().status == "approved"
     assert (await h.state())[PHASE_KEY] == "executing"
+    assert MemoryStore(tmp_path).list_records() == []  # 실패는 작업 기록이 없다
 
 
 def test_precheck_denies_only_sure_denials() -> None:

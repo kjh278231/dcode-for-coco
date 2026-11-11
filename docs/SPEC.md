@@ -1,6 +1,6 @@
 # dcode 기반 Coding Assistant 구현 명세
 
-상태: M3까지 구현 (2026-11-11). 진행과 명세에서 벗어난 점은 `PROGRESS.md`에 적는다. 결정의 배경은 `docs/DESIGN.md`에 있다. 두 문서가 다르면 이 문서가 맞다.
+상태: M5까지 구현 (2026-11-11). 진행과 명세에서 벗어난 점은 `PROGRESS.md`에 적는다. 결정의 배경은 `docs/DESIGN.md`에 있다. 두 문서가 다르면 이 문서가 맞다.
 
 이 문서는 구현자가 추측 없이 만들 수 있도록 쓴다. 메서드마다 시그니처, 계약, 단계, 실패 동작을 적고 본문 코드는 적지 않는다.
 
@@ -95,11 +95,16 @@ libs/code/tests/unit_tests/assistant/
 | `DC/client/launch/server_manager.py` | `ServerConfig.from_cli_args` 호출에 `plan_gate` 전달 | M3 |
 | `DC/server_graph.py` | `create_cli_agent`에 옵션 전달, `make_graph`에 Langfuse 핸들러 | M3, M6 |
 | `DC/agent.py` | `create_cli_agent` 인자, 미들웨어와 서브에이전트 등록, 승인 술어. [M4] `_subagent_cli_middleware`에 `SubagentWriteBlockMiddleware`, 확장 도구 이름을 `plan_gate.mcp_mutating_tool_names`에 더함 | M3, M4 |
-| `DC/main.py` | 키 사전 검사, LangSmith 기본 끄기 | M3, M6 |
+| `DC/main.py` | LangSmith 기본 끄기. [M5] 키 검사는 `client/launch/server_manager.py`로 옮겼다 | M3, M6 |
+| `DC/client/launch/server_manager.py` | `start_server_and_get_agent`에서 Jev 키 검사 (3.10) | M5 |
 | `DC/client/non_interactive.py` | `server_session` 호출에 `plan_gate` 전달 | M3 |
 | `libs/code/scripts/check_process_cwd.py` | `run_non_interactive`의 `Path.cwd` 허용 항목 토큰 `99c1d085` → `86fa45ed` (사유 문구 그대로). 같은 문장에 `plan_gate=`를 더해 토큰이 바뀌었다 | M3 |
 | `scripts/smoke_dcode.sh`, `tests/integration_tests/test_headless_resume.py` | `DEEPAGENTS_CODE_PLAN_GATE=0` | M3 |
 | `DC/config.py` | `build_stream_config`에 Langfuse metadata | M6 |
+| `DC/command_registry.py` | `/remember` 설명과 인자 표시, `_STATIC_SKILL_ALIASES`에서 `remember` 제거 | M5 |
+| `libs/code/COMMANDS.md` | `generate_commands_catalog.py`로 다시 만듦 | M5 |
+| `DC/_env_vars.py`, `DC/agent.py` docstring | "the `remember` skill" → "`/remember`" | M5 |
+| `tests/unit_tests/smoke_tests/snapshots/system_prompt_*_local.md`, `tests/unit_tests/test_app.py::TestRememberRequiresMessages` | 삭제한 remember 스킬을 직접 검사 (9.4) | M5 |
 | `DC/command_registry.py` | `/improve`, `/runs` 등록, `/trace` 설명 변경 | M7 |
 | `DC/app.py` | `/improve`, `/runs` 처리기, `/trace`와 `/remember` 교체 | M5, M7 |
 | `DC/built_in_skills/remember/SKILL.md` | 삭제 | M5 |
@@ -426,7 +431,7 @@ def question_j2(plan: Plan) -> tuple[str, Noul]: ...   # 작업 범위가 요구
 def question_j3(plan: Plan) -> tuple[str, Noul]: ...   # 작업 순서와 테스트 방법이 수정 대상에 대응하는가
 def question_j4(plan: Plan, tool_name: str, summary: str) -> tuple[str, Noul]: ...   # 이 호출이 승인된 계획 범위 안인가
 def question_j5(request: str, exploration: str) -> tuple[str, Noul]: ...   # 이 요청이 코드 변경을 필요로 하는가
-def questions_j6(request: str, records: Sequence[MemoryRecord]) -> tuple[str, list[Noul]]: ...   # 기억마다 하나. MemoryRecord가 생기는 M5에서 더한다
+def questions_j6(request: str, records: Sequence[MemoryRecord]) -> tuple[str, list[Noul]]: ...   # 기억마다 하나 (M5). state는 요청뿐이고 기록의 이름과 설명은 질문마다 넣는다
 ```
 
 각 함수는 `(state 문자열, 질문)`을 돌려준다. `state`는 판정에 필요한 본문만 담고 4,000자에서 자른다. 넘치면 각 부분(호출 요약, 요청, 절)을 같은 몫으로 잘라 긴 절 하나가 나머지를 밀어내지 않게 한다. 판정 대상(J4의 호출 요약, J5의 요청)을 앞에 둔다. J4의 `summary`는 도구 이름과 인자 요약이고 경로와 명령만 담는다. 파일 내용은 넣지 않는다.
@@ -998,18 +1003,18 @@ def _build_plan_gate_options(config: ServerConfig, *, model: BaseChatModel, proj
 
 [실행 확인, M3] 모델 객체는 `server_graph`의 `result.model`(`create_model`의 결과)로 `create_cli_agent` 밖에서 얻는다. 환경은 `workspace_env`를 쓴다. 프로젝트 루트는 `project_context.project_root or project_context.user_cwd`이고, `project_context`가 None이면 `config.cwd`로 물러선다. 셋 다 없으면 `RuntimeError`.
 
-**키 사전 검사.** `DC/main.py`의 서브커맨드 분기 시작 (`:6571` `if args.command == "help":`) 바로 앞에 넣는다.
+**키 검사.** [M5, O5 개정] 서버 기동 경로 한 곳에서 한다. `DC/client/launch/server_manager.py`의 `start_server_and_get_agent` 첫머리, `plan_gate`가 True일 때 `_preflight_validate_mcp_config` 앞이다. TUI(`PrespawnedServer`, 앱의 서버 시작)와 `-n`(`server_session`)이 모두 이 함수를 지나고, 서버 프로세스와 그래프를 만들기 전이다.
 
 ```python
-def _require_typesafe_key(args: argparse.Namespace, environ: Mapping[str, str]) -> None:
-    """Jev 키가 없으면 안내를 출력하고 종료 코드 1로 끝낸다."""
-    # 1) args.command가 None이 아니면 반환 (threads, skills, mcp 같은 하위 명령은 검사하지 않는다)
-    # 2) 계획 게이트가 꺼져 있으면 반환 (PLAN_GATE 환경변수가 "0" 또는 "false")
-    # 3) environ에 TYPESAFE_API_KEY나 OPENROUTER_API_KEY가 있고 비어 있지 않으면 반환
-    # 4) stderr에 안내를 쓰고 sys.exit(1)
+class MissingJevKeyError(ValueError): ...   # decider.py. 메시지는 변수 이름만
+
+def require_jev_key(environ: Mapping[str, str]) -> None:
+    """TYPESAFE_API_KEY와 OPENROUTER_API_KEY가 모두 비었으면 MissingJevKeyError."""
 ```
 
-[확인] 이 자리는 `--version` (`:5620`), `auth` (`:5774`), 설정과 진단 명령, 업데이트 명령이 이미 끝난 뒤다. `.env`도 이미 읽혔다 (`:5756`). 대화형과 비대화형이 모두 이 자리를 지난다.
+호출은 `require_jev_key(os.environ)`이다. 클라이언트가 `.env`를 읽은 뒤다. 비대화형은 `run_non_interactive`의 `ValueError` 처리로 "Error: <안내>"를 출력하고 종료 코드 1이다(실행 확인). TUI는 기존 서버 시작 실패 처리(`ServerStartFailed`)로 대화 화면에 안내를 보인다. 하위 명령(threads, skills 등)은 서버를 띄우지 않으므로 검사하지 않는다.
+
+[M5] 처음(M3)에는 `cli_main`의 하위 명령 분기 앞에서 `sys.exit(1)`했다. 그 자리는 `--yolo` 확인, MCP 서버 선택 같은 시작 프롬프트보다 앞이라, 그 프롬프트를 시험하는 `test_main.py::TestStartupAutoUpdate`가 키 없는 환경에서 1로 끝났다. 키가 있는지는 테스트 순서에 달렸다: `.env`는 프로세스당 한 번 부트스트랩이 `os.environ`에 넣는데 `tests/unit_tests/conftest.py`의 `_restore_os_environ`이 테스트마다 환경을 되돌린다. 그래서 자리를 옮겼다. 키가 없다는 안내는 이제 시작 프롬프트와 시작 업데이트 뒤에 나온다(받아들임).
 
 안내 문구는 키의 이름과 설정 방법만 말한다. 키 값을 출력하지 않는다.
 
@@ -1041,6 +1046,7 @@ def gate_prompt(phase: str, plan_summary: str | None) -> str:
 5. 승인되면 계획의 `targets` 안에서 작업하고, 끝나면 `complete_plan`을 부른다.
 6. 계획에 없는 파일을 고쳐야 하면 `submit_plan`으로 계획을 고친다.
 7. `.deepagents/plans`, `.deepagents/memory`는 직접 고치지 않는다.
+8. [M5] 저장소에 계속 적용할 규칙을 알게 되면 `propose_rule`로 제안한다. 사람이 확인해야 저장된다.
 
 `ASK_HUMAN_CRITERIA`는 `docs/DESIGN.md` 7장의 표를 그대로 옮긴다. `GATE_BASE`와 `REVIEWER_SYSTEM` 양쪽에 넣는다. 미결 질문마다 묻는 이유 한 줄, 선택지, 권하는 답을 붙이라고 지시한다.
 
@@ -1112,7 +1118,9 @@ class MemoryStore:
     def save(self, record: MemoryRecord) -> Path:
         """기억을 쓰고 색인을 다시 만든다. 같은 이름이 있으면 덮어쓴다."""
         # 1) name 검증: 소문자 영숫자와 하이픈만, kind 접두사("rule-" 또는 "work-")로 시작
-        # 2) description 검증: 한 줄, 200자 이하
+        # 2) description 검증: 한 줄, 200자 이하. [M5 리뷰] `splitlines()`가 1줄이어야 한다("\r" 등도 막는다)
+        # [M5 리뷰] 쓰기(save, delete, rebuild_index) 전에 기억 폴더가 resolve 뒤에도 프로젝트 루트 안인지 본다.
+        #   밖이면(심볼릭 링크) PermissionError. 폴더 경로는 ProjectPaths.memory_dir
         # 3) 임시 파일에 쓰고 os.replace
         # 4) rebuild_index()
 
@@ -1126,7 +1134,9 @@ class MemoryStore:
         """MEMORY.md 내용에서 첫 줄 주석을 뺀 문자열. 파일이 없으면 빈 문자열."""
 
     def save_rule(self, description: str, body: str, *, source: str, now: datetime) -> MemoryRecord:
-        """프로젝트 규칙을 저장한다. 이름은 "rule-" + description에서 만든 슬러그다."""
+        """프로젝트 규칙을 저장한다. 이름은 "rule-" + description의 영숫자 슬러그 + "-" + description 해시 6자리.
+        [M5] 한글만 있는 설명은 슬러그가 비어 서로 덮어쓰므로 해시를 붙인다. 슬러그가 비면 "rule-<해시>".
+        같은 설명은 같은 이름이라 다시 저장하면 덮어쓴다."""
 
     def save_work_record(self, plan: Plan, summary: str, *, now: datetime) -> MemoryRecord:
         """끝난 계획에서 작업 기록을 만든다. 모델을 부르지 않는다."""
@@ -1162,8 +1172,10 @@ class MemoryInjectionMiddleware(AgentMiddleware):
         # 2) store.list_records("work")를 to_thread로 읽는다
         # 3) 없으면 선택 목록은 빈 목록
         # 4) 있으면 decider.judge(questions_j6(요청 본문, 기록들))을 to_thread로 부른다
+        #    [M5 리뷰] phase가 idle이 아니고 계획이 있으면 요청 본문은 "계획의 요구사항 + 빈 줄 + 새 메시지"다.
+        #    "승인", "계속해" 같은 짧은 메시지만으로 고르면 관련 기록이 빠진다
         #    질문 이름은 "J6:<기억 이름>". 통과한 것의 이름만 모은다
-        # 5) tracing.span("cg.memory.inject", output={"selected": [...], "candidates": n})
+        # 5) tracing.span("cg.memory.inject", output={"selected": [...], "candidates": n})  [M6에서 더한다]
         # 6) {"_cg_selected_memories": [...], "_cg_memory_human_id": 새 id} 반환
 
     async def awrap_model_call(self, request, handler):
@@ -1189,7 +1201,7 @@ J6는 요청당 한 번만 돈다. 재개된 실행에서 다시 돌지 않게 �
 
 [확정] 프로젝트 규칙은 판정 없이 항상 주입한다. 작업 기록만 J6가 고른다. Jev 호출은 작업 기록 32개당 한 번이다.
 
-주입 크기 상한을 둔다. 규칙과 선택된 기록의 본문 합이 20,000자를 넘으면 뒤의 것부터 본문을 빼고 이름과 설명만 남긴다. 뺀 사실을 구간에 기록한다.
+주입 크기 상한을 둔다. 규칙과 선택된 기록의 본문 합이 20,000자를 넘으면 뒤의 것부터 본문을 빼고 이름과 설명만 남긴다. 뺀 사실을 구간에 기록한다 [구간은 M6]. [M5 리뷰] 상한은 틀 안 전체(색인, 생략 줄 포함)에 건다. 색인은 5,000자를 넘으면 앞(오래된) 줄을 빼고 최근 줄을 남긴다. 본문을 뺀 뒤에도 넘으면 20,000자에서 자르고 잘렸다고 적는다. 주입하는 글의 `<project_memory`, `</project_memory`는 `&lt;`로 바꿔 틀을 닫거나 새로 열지 못하게 한다. [M5] 규칙도, 선택된 기록도, 색인 항목도 없으면 주입하지 않는다(MEMORY.md가 없어도 선택된 기록은 넣는다). 동기 `before_agent`, `wrap_model_call`도 같은 동작으로 둔다.
 
 **등록.** `DC/agent.py`의 `if enable_memory:` 블록 (`:3254` ~ `:3283`) 끝에 넣는다. `plan_gate`가 있을 때만이다.
 
@@ -1199,7 +1211,7 @@ if plan_gate is not None:
     agent_middleware.append(memory_injection)
 ```
 
-서브에이전트 스택에는 넣지 않는다. 탐색 서브에이전트는 기억 파일을 직접 읽는다.
+서브에이전트 스택에는 넣지 않는다. 탐색 서브에이전트는 기억 파일을 직접 읽는다. [M5 확인] 다만 fork `general-purpose`는 SDK가 부모 미들웨어를 이름 그대로 물려받게 해서(`SDK/graph.py` fork 분기, 부모 프롬프트를 다시 만들려는 설계) `MemoryInjectionMiddleware`가 들어간다. 비공개 상태가 넘어가지 않아 fork 작업마다 J6가 한 번 더 돈다(작업 기록이 있을 때). 쓰기는 막혀 있다. **예외로 둔다** (DECISIONS O3): fork는 부모 프롬프트를 그대로 재구성하는 설계라 빼지 않는다. 비용은 fork 호출마다 J6 한 번이다.
 
 ### 5.4 기존 Memory 기능과의 정리
 
@@ -1211,7 +1223,7 @@ if plan_gate is not None:
 | `/remember` 명령 (`DC/app.py:18291`) | 스킬 호출 대신 `MemoryStore.save_rule`을 클라이언트에서 직접 부른다 |
 | remember 스킬 (`DC/built_in_skills/remember/`) | 삭제한다. `_STATIC_SKILL_ALIASES` (`DC/command_registry.py:536`)에서도 뺀다 |
 
-`/remember <글>`의 새 동작. 사용자가 직접 말한 규칙이므로 확인 없이 저장한다. 설명은 글의 첫 줄, 본문은 전체다. 인자가 없으면 "저장할 규칙을 함께 적어 주세요"를 출력한다. 프로젝트 루트는 클라이언트의 프로젝트 컨텍스트에서 얻는다.
+`/remember <글>`의 새 동작. 사용자가 직접 말한 규칙이므로 확인 없이 저장한다. 같은 설명의 규칙이 있으면 "덮어썼다"로 알린다. 설명은 글의 첫 줄(200자에서 자른다), 본문은 전체다. [M5] 프로젝트 루트는 `hooks.trust.project_root_for(cwd)`(프로젝트 루트, 없으면 cwd)로 서버 게이트와 같게 얻는다. 게이트가 꺼진 세션에서도 저장하지만 그때는 주입되지 않는다. 명령 설명은 "Save a project rule to .deepagents/memory", 인자 표시는 `<rule>`이다. 인자가 없으면 "저장할 규칙을 함께 적어 주세요"를 출력한다. 프로젝트 루트는 클라이언트의 프로젝트 컨텍스트에서 얻는다.
 
 ### 5.5 `propose_rule` 도구
 
@@ -1227,8 +1239,10 @@ def propose_rule(
     """프로젝트 규칙 후보를 사람에게 보여주고, 승인되면 저장한다."""
     # 1) 비대화이면 저장하지 않는다. "비대화 실행에서는 규칙을 저장할 수 없다"를 돌려준다
     # 2) interrupt(ask_user 모양: 규칙 내용 + 선택지 "저장", "버림")
+    #    [M5 리뷰] 같은 설명의 규칙이 이미 있으면 질문이 "기존 규칙 <이름>을 바꿀까요?"다. 답은 strip해서 본다
     # 3) "저장"이면 store.save_rule(..., source="agent-approved")
     # 4) 결과를 ToolMessage로 돌려준다
+    # [M5] 동기 함수와 비동기 함수를 모두 둔다(request_plan_approval과 같다). "저장" 밖의 답, 취소는 버림이다
 ```
 
 멈추기 전에 비용이 드는 일을 하지 않는다. 저장은 재개 뒤에 한 번만 일어난다. `save_rule`이 같은 이름을 덮어쓰므로 다시 실행돼도 안전하다.
@@ -1970,7 +1984,8 @@ README에 함께 적는 것. 필요한 키와 없을 때의 동작, 게이트 �
 - 사람에게 되묻는 판단은 모델에 맡겼다. 놓친 질문은 사람이 승인할 때 잡아야 한다.
 - 계획이 `complete_plan` 없이 남으면 phase가 `executing`으로 유지된다. 이후 요청의 쓰기는 전부 J4에 기댄다. 사용자가 계획을 닫을 명령은 아직 없다.
 - 보호 폴더에 대한 `execute` 검사는 문자열 대조다. 경로를 변수로 조립하는 명령은 놓칠 수 있다. 승인 전에는 읽기 전용 명령만 통과하므로 그때는 안전하다. 승인 뒤에는 J4가 남은 방어다.
-- J6는 요청문만 보고 기억을 고른다. 짧은 요청에서는 관련 기억을 놓칠 수 있다. 색인이 항상 주입되므로 모델이 직접 열 수 있다.
+- `MemoryStore`의 쓰기와 `rebuild_index`는 잠금이 없다. 두 프로세스(서버의 `complete_plan`, 클라이언트의 `/remember`)가 동시에 저장하면 색인이 한쪽 기억을 빠뜨릴 수 있다. 다음 저장이 색인을 다시 만들면 맞춰진다. 기억 파일 자체는 원자적으로 쓴다.
+- J6는 요청문만 보고 기억을 고른다(계획 진행 중이면 계획의 요구사항도). 짧은 요청에서는 관련 기억을 놓칠 수 있다. 색인이 항상 주입되므로 모델이 직접 열 수 있다.
 - Langfuse 키가 없으면 평가 4번 항목과 자기 개선 전체가 동작하지 않는다.
 - 자기 개선 검증은 회귀 검사다. 개선안이 실제로 도움이 됐는지는 입증하지 않는다.
 - 신호의 임계값과 Jev 임계값의 시작값은 근거 없이 정했다.

@@ -18289,20 +18289,10 @@ class DeepAgentsApp(App):
         elif cmd == "/extensions":
             await self._handle_extensions_command(command)
         elif cmd == "/remember" or cmd.startswith("/remember "):
-            # Convenience alias for /skill:remember — shorter and discoverable
-            # before skill loading completes.
-            args = command.strip()[len("/remember") :].strip()
-            if not args and not await self._has_conversation_messages():
-                await self._mount_message(UserMessage(command))
-                await self._mount_message(
-                    AppMessage(
-                        "Nothing to remember yet. Start a conversation first,"
-                        " then use /remember to capture learnings.",
-                    ),
-                )
-                return
-            rewritten = f"/skill:remember {args}" if args else "/skill:remember"
-            await self._handle_skill_command(rewritten)
+            await self._mount_message(UserMessage(command))
+            await self._mount_message(
+                AppMessage(await self._save_remembered_rule(command))
+            )
         elif cmd == "/skill-creator" or cmd.startswith("/skill-creator "):
             # Convenience alias for /skill:skill-creator — shorter and
             # discoverable before skill loading completes.
@@ -18961,6 +18951,41 @@ class DeepAgentsApp(App):
 
         skill_name, args = parse_skill_command(command)
         await self._invoke_skill(skill_name, args, command=command)
+
+    async def _save_remembered_rule(self, command: str) -> str:
+        """Save `/remember <text>` as a project rule without asking.
+
+        Returns:
+            The message to show the user.
+        """
+        from datetime import UTC, datetime
+
+        from deepagents_code.assistant.memory import (
+            MemoryFormatError,
+            MemoryStore,
+            rule_name,
+        )
+        from deepagents_code.hooks.trust import project_root_for
+
+        text = command.strip()[len("/remember") :].strip()
+        if not text:
+            return "저장할 규칙을 함께 적어 주세요"
+
+        def save() -> str:
+            # Same root the server's plan gate uses: project root, else the cwd.
+            store = MemoryStore(project_root_for(Path(self._cwd)))
+            description = text.splitlines()[0][:200].strip()
+            replaced = store.exists(rule_name(description))
+            record = store.save_rule(
+                description, text, source="user", now=datetime.now(UTC)
+            )
+            verb = "덮어썼다" if replaced else "저장했다"
+            return f"규칙을 {verb}: {record.name}"
+
+        try:
+            return await asyncio.to_thread(save)
+        except (MemoryFormatError, OSError) as exc:
+            return f"규칙을 저장하지 못했다: {exc}"
 
     async def _has_conversation_messages(self) -> bool:
         """Check whether the current thread has at least one human message.

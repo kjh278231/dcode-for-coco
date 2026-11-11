@@ -222,11 +222,11 @@ COMMANDS: tuple[SlashCommand, ...] = (
         argument_hint="[model [<spec>|clear]]",
         aliases=("/compact",),
     ),
-    SlashCommand(  # Static alias; not auto-generated from skill discovery
+    SlashCommand(
         name="/remember",
-        description="Save useful context to memory or skills",
+        description="Save a project rule to .deepagents/memory",
         bypass_tier=BypassTier.QUEUED,
-        argument_hint="[context]",
+        argument_hint="<rule>",
     ),
     # Keep after `/remember` so equal-score prefix ties resolve as
     # `re` → `/remember`, `rel` → `/reload`.
@@ -533,7 +533,7 @@ def parse_skill_command(command: str) -> tuple[str, str]:
     return skill_name, args
 
 
-_STATIC_SKILL_ALIASES: frozenset[str] = frozenset({"remember", "skill-creator"})
+_STATIC_SKILL_ALIASES: frozenset[str] = frozenset({"skill-creator"})
 """Built-in skill names that have a dedicated top-level slash command.
 
 Only list skills whose `/skill:<name>` form is redundant because a `/<name>`
@@ -589,7 +589,7 @@ def build_skill_commands(
     short, source-tagged label in the popup.
 
     Skills that already have a dedicated slash command in `COMMANDS`
-    (e.g., `remember` → `/remember`) are excluded to avoid duplicate
+    (e.g., `skill-creator` → `/skill-creator`) are excluded to avoid duplicate
     autocomplete entries.
 
     Args:

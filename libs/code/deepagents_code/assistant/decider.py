@@ -1,4 +1,4 @@
-"""Jev 판정기와 판정 질문 J1~J5."""
+"""Jev 판정기와 판정 질문 J1~J6."""
 
 from __future__ import annotations
 
@@ -8,12 +8,13 @@ from typing import TYPE_CHECKING, ClassVar, Literal, Protocol
 
 import httpx
 
-from deepagents_code._env_vars import PLAN_GATE_JEV_THRESHOLD
+from deepagents_code._env_vars import PLAN_GATE, PLAN_GATE_JEV_THRESHOLD
 from deepagents_code.assistant.options import JEV_THRESHOLD_DEFAULT
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from deepagents_code.assistant.memory import MemoryRecord
     from deepagents_code.assistant.plan import Plan
 
 KEY_ENV: str = "TYPESAFE_API_KEY"
@@ -47,6 +48,29 @@ class Verdict:
 
 class DeciderError(RuntimeError):
     """Jev 호출 실패. 메시지에 키나 요청 본문을 넣지 않는다."""
+
+
+class MissingJevKeyError(ValueError):
+    """계획 게이트에 필요한 Jev 키가 없다. 메시지는 변수 이름만 말한다."""
+
+
+def require_jev_key(environ: Mapping[str, str]) -> None:
+    """Jev 키가 없으면 안내 문구로 MissingJevKeyError를 낸다.
+
+    Args:
+        environ: `.env`를 읽은 뒤의 환경변수.
+
+    Raises:
+        MissingJevKeyError: TYPESAFE_API_KEY와 OPENROUTER_API_KEY가 모두 비었을 때.
+    """
+    if environ.get(KEY_ENV, "").strip() or environ.get(OPENROUTER_KEY_ENV, "").strip():
+        return
+    msg = (
+        f"계획 게이트에는 Jev 판정 키가 필요하다. {KEY_ENV} 또는 "
+        f"{OPENROUTER_KEY_ENV}를 환경변수나 .env에 설정한다.\n"
+        f"게이트 없이 실행하려면 {PLAN_GATE}=0을 설정한다."
+    )
+    raise MissingJevKeyError(msg)
 
 
 class Decider(Protocol):
@@ -386,3 +410,31 @@ def question_j5(request: str, exploration: str) -> tuple[str, Noul]:
         true="요청이 코드, 설정, 문서 파일의 생성, 수정, 삭제를 요구한다.",
         false="요청이 질문, 설명, 조사처럼 파일을 바꾸지 않고 답할 수 있는 것이다.",
     )
+
+
+def questions_j6(
+    request: str, records: Sequence[MemoryRecord]
+) -> tuple[str, list[Noul]]:
+    """작업 기록마다 이 요청과 관련 있는가를 묻는다.
+
+    state는 요청 하나를 모든 질문이 같이 쓴다. 기록의 이름과 설명은 질문마다 넣는다.
+
+    Args:
+        request: 사용자의 요청문.
+        records: 후보 작업 기록.
+
+    Returns:
+        (state, 질문 목록). 질문 이름은 `J6:<기억 이름>`.
+    """
+    state = _state(f"## 요청\n{request}")
+    questions = [
+        Noul(
+            name=f"J6:{r.name}",
+            instructions="다음 작업 기록이 이 요청을 처리하는 데 참고가 되는가? "
+            f"기록 {r.name}: {r.description}",
+            true="기록이 요청과 같은 파일, 기능, 결정, 오류를 다룬다.",
+            false="기록이 요청과 다른 기능이나 파일을 다루어 참고할 것이 없다.",
+        )
+        for r in records
+    ]
+    return state, questions

@@ -71,7 +71,17 @@ run_baseline() {
     sed 's/^/  /' <<<"$fixed"
   fi
   if [[ -n "$new" ]]; then
-    echo "새 실패 ($(wc -l <<<"$new")건). docs/SPEC.md 9.4절과 13장을 따른다:" >&2
+    # 업스트림 테스트끼리 상태가 새서 xdist 배치에 따라 실패하는 것이 있다(M0 코드에서도 재현, DECISIONS.md O6).
+    # 새 실패만 따로 다시 돌려 통과하면 순서 의존으로 보고 실패로 세지 않는다.
+    local rerun_log="${log%.log}-rerun.log"
+    # shellcheck disable=SC2086
+    if "$VENV/pytest" -q -p no:xdist "${PYTEST_FLAGS[@]}" $new >"$rerun_log" 2>&1; then
+      echo "순서 의존 실패 ($(wc -l <<<"$new")건): 전체 실행에서 실패, 따로 돌리면 통과. 로그: $rerun_log"
+      sed 's/^/  /' <<<"$new"
+      echo "통과: 따로 돌려도 실패하는 새 실패가 없다."
+      return 0
+    fi
+    echo "새 실패 ($(wc -l <<<"$new")건). 따로 돌려도 실패가 남는다 ($rerun_log). docs/SPEC.md 9.4절과 13장을 따른다:" >&2
     sed 's/^/  /' <<<"$new" >&2
     return 1
   fi

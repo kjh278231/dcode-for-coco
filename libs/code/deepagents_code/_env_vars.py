@@ -434,7 +434,7 @@ MEMORY_AUTO_SAVE = "DEEPAGENTS_CODE_MEMORY_AUTO_SAVE"
 When enabled, the memory prompt tells the agent to proactively persist
 learnings to the `AGENTS.md` memory files. Set to a falsy value (`0`, `false`,
 `no`, `off`, or empty) to keep loading memory into context while disabling the
-auto-save guidance; explicit saves (e.g. the `remember` skill) still work.
+auto-save guidance; explicit saves (e.g. `/remember`) still work.
 """
 
 NO_TERMINAL_ESCAPE = "DEEPAGENTS_CODE_NO_TERMINAL_ESCAPE"

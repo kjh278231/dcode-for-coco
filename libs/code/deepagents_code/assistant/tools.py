@@ -1,4 +1,4 @@
-"""계획 도구: submit_plan, request_plan_approval, complete_plan."""
+"""계획 도구: submit_plan, request_plan_approval, complete_plan, propose_rule."""
 
 from __future__ import annotations
 
@@ -12,6 +12,11 @@ from langchain_core.tools import StructuredTool
 from langgraph.types import Command, interrupt
 
 from deepagents_code.assistant.decider import question_j1, question_j2, question_j3
+from deepagents_code.assistant.memory import (
+    MemoryFormatError,
+    MemoryStore,
+    rule_name,
+)
 from deepagents_code.assistant.options import (
     APPROVE_WORDS,
     APPROVED_HUMAN_ID_KEY,
@@ -106,16 +111,17 @@ def build_plan_tools(
 ) -> list[BaseTool]:
     """계획 도구를 만든다. PlanGateMiddleware.tools가 이 목록을 쓴다.
 
-    `propose_rule`(M5)과 `propose_improvement`(M7)는 아직 없다.
+    `propose_improvement`(M7)는 아직 없다.
 
     Args:
         options: 게이트 옵션.
         backend: `complete_plan`이 테스트 명령을 실행할 백엔드.
 
     Returns:
-        submit_plan, request_plan_approval, complete_plan.
+        submit_plan, request_plan_approval, complete_plan, propose_rule.
     """
     store = PlanStore(options.project_root)
+    memory = MemoryStore(options.project_root)
 
     async def submit_plan(  # 계획의 절마다 인자 하나
         requirements: str,
@@ -423,7 +429,6 @@ def build_plan_tools(
         Returns:
             상태 갱신과 결과 메시지.
         """
-        del summary  # 작업 기록(M5)과 추적(M6)에서 쓴다
         name = "complete_plan"
         state = runtime.state
         plan = await asyncio.to_thread(_load, store, state.get(PLAN_ID_KEY))
@@ -440,9 +445,18 @@ def build_plan_tools(
         except NotImplementedError:
             exit_code, output = None, "이 세션의 백엔드는 셸 명령을 실행할 수 없다."
         if exit_code == 0:
-            await asyncio.to_thread(store.save, plan.with_updates(status="done"))
+            done = plan.with_updates(status="done")
+            await asyncio.to_thread(store.save, done)
+            text = f"테스트 통과: {plan.test_command}. 계획을 마쳤다."
+            try:
+                record = await asyncio.to_thread(
+                    memory.save_work_record, done, summary, now=datetime.now(UTC)
+                )
+                text += f" 작업 기록 {record.name}을 저장했다."
+            except (OSError, ValueError) as exc:
+                text += f" 작업 기록은 저장하지 못했다: {exc}"
             return _reply(
-                f"테스트 통과: {plan.test_command}. 계획을 마쳤다.",
+                text,
                 tool_call_id,
                 name,
                 **{PHASE_KEY: "idle"},
@@ -455,6 +469,98 @@ def build_plan_tools(
             error=True,
         )
 
+    def _rule_question(description: str, body: str) -> dict[str, Any]:
+        ask = "프로젝트 규칙으로 저장할까요?"
+        name = rule_name(description.strip())
+        if memory.exists(name):
+            ask = f"같은 설명의 기존 규칙 {name}을 이 내용으로 바꿀까요?"
+        return {
+            "question": f"{ask}\n\n{description}\n\n{body}",
+            "type": "multiple_choice",
+            "choices": [{"value": "저장"}, {"value": "버림"}],
+        }
+
+    def _rule_result(
+        description: str, body: str, response: object, tool_call_id: str
+    ) -> Command[Any]:
+        name = "propose_rule"
+        answers = response.get("answers") if isinstance(response, dict) else None
+        if not (
+            isinstance(answers, list) and answers and str(answers[0]).strip() == "저장"
+        ):
+            return _reply("사람이 규칙을 저장하지 않기로 했다.", tool_call_id, name)
+        try:
+            record = memory.save_rule(
+                description, body, source="agent-approved", now=datetime.now(UTC)
+            )
+        except (MemoryFormatError, OSError) as exc:
+            text = f"규칙을 저장하지 못했다: {exc}"
+            return _reply(text, tool_call_id, name, error=True)
+        return _reply(f"규칙 {record.name}을 저장했다.", tool_call_id, name)
+
+    def _rule_headless(tool_call_id: str) -> Command[Any] | None:
+        if options.interactive:
+            return None
+        return _reply(
+            "비대화 실행에서는 규칙을 저장할 수 없다.",
+            tool_call_id,
+            "propose_rule",
+            error=True,
+        )
+
+    def propose_rule(
+        description: str,
+        body: str,
+        tool_call_id: Annotated[str, InjectedToolCallId],
+        runtime: ToolRuntime[Any, Any],
+    ) -> Command[Any]:
+        """프로젝트 규칙 후보를 사람에게 보여주고, 승인되면 저장한다.
+
+        Args:
+            description: 규칙의 한 줄 설명 (200자 이하).
+            body: 규칙 본문. 왜 그런지 한 줄을 함께 적는다.
+            tool_call_id: 주입되는 호출 id.
+            runtime: 주입되는 도구 실행 환경.
+
+        Returns:
+            결과 메시지.
+        """
+        del runtime
+        if (early := _rule_headless(tool_call_id)) is not None:
+            return early
+        response = interrupt(
+            _payload(tool_call_id, [_rule_question(description, body)])
+        )
+        return _rule_result(description, body, response, tool_call_id)
+
+    async def apropose_rule(
+        description: str,
+        body: str,
+        tool_call_id: Annotated[str, InjectedToolCallId],
+        runtime: ToolRuntime[Any, Any],
+    ) -> Command[Any]:
+        """프로젝트 규칙 후보를 사람에게 보여주고, 승인되면 저장한다.
+
+        Args:
+            description: 규칙의 한 줄 설명 (200자 이하).
+            body: 규칙 본문. 왜 그런지 한 줄을 함께 적는다.
+            tool_call_id: 주입되는 호출 id.
+            runtime: 주입되는 도구 실행 환경.
+
+        Returns:
+            결과 메시지.
+        """
+        del runtime
+        if (early := _rule_headless(tool_call_id)) is not None:
+            return early
+        # 멈추기 전에는 비용이 드는 일을 하지 않는다. 저장은 재개 뒤에 한 번
+        response = interrupt(
+            _payload(tool_call_id, [_rule_question(description, body)])
+        )
+        return await asyncio.to_thread(
+            _rule_result, description, body, response, tool_call_id
+        )
+
     return [
         StructuredTool.from_function(coroutine=submit_plan, name="submit_plan"),
         StructuredTool.from_function(
@@ -463,4 +569,7 @@ def build_plan_tools(
             name="request_plan_approval",
         ),
         StructuredTool.from_function(coroutine=complete_plan, name="complete_plan"),
+        StructuredTool.from_function(
+            func=propose_rule, coroutine=apropose_rule, name="propose_rule"
+        ),
     ]

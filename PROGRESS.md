@@ -119,4 +119,46 @@
 - 확인한 문제(고치지 않음): 서브에이전트에는 phase가 없어 `precheck_denies`가 False다. 자동 승인이 아니면 서브에이전트의 쓰기 호출에 dcode 승인 화면이 먼저 뜨고 그 뒤에 거부된다. 쓰기 도구는 모델 목록에서 빠져 있어 모델이 이름을 지어낼 때만 생긴다.
 - 확인 못 한 것: 실제 모델 TUI는 돌리지 않았다. 허용 목록 때문에 서브에이전트에서 읽기 전용 주석이 없는 MCP 도구와 확장 도구, fork의 `update_goal`이 막힌다. 그런 도구에 기대는 사용자 서브에이전트는 실제로 확인하지 않았다. `ty`는 돌리지 않았다.
 
-## M5. Memory — 다음
+## M5. Memory — 완료 (2026-11-11)
+
+- 추가: `deepagents_code/assistant/memory.py`(`MemoryRecord`, `MemoryStore`, `MemoryInjectionMiddleware`), `tests/unit_tests/assistant/test_memory.py`.
+- 수정(assistant): `decider.py`(`questions_j6`), `tools.py`(`propose_rule`, `complete_plan` 성공 시 `save_work_record`), `prompts.py`(`GATE_BASE` 8번: `propose_rule`).
+- 수정(업스트림): `agent.py`(게이트가 있으면 `MemoryMiddleware`를 읽기 전용 프롬프트로, `if enable_memory:` 끝에 `MemoryInjectionMiddleware`), `app.py`(`/remember` → `_save_remembered_rule`, 확인 없이 `save_rule(source="user")`), `command_registry.py`(`/remember` 설명과 인자 표시, `_STATIC_SKILL_ALIASES`에서 `remember` 제거), `COMMANDS.md` 재생성, `_env_vars.py`·`agent.py` docstring 문구. `built_in_skills/remember/` 삭제.
+- 먼저 확인할 [미확인]: M5에는 없다.
+- 고친 업스트림 테스트 (9.4 "삭제한 remember 스킬을 직접 검사하는 테스트", README에 옮길 것):
+  - `tests/unit_tests/smoke_tests/snapshots/system_prompt_interactive_local.md`, `system_prompt_headless_local.md`: 스킬 목록의 remember 두 줄씩 삭제. `--update-snapshots`로 다시 만든 diff가 정확히 그 4줄뿐임을 확인했다. 테스트 코드는 그대로다.
+  - `tests/unit_tests/test_app.py::TestRememberRequiresMessages` 두 테스트: `/skill:remember`로 넘기는지 단언하던 것을 새 동작(규칙 파일이 `cwd=tmp_path` 아래 저장되는지, 빈 인자면 안내 문구와 저장 없음)으로 바꿨다. 이름은 그대로 두었다.
+- 검사:
+  - `check.sh unit` 167 passed (새 테스트 13). `test_memory.py`: 저장/읽기/색인/삭제, 한글 설명 이름 충돌 없음, 잘못된 기록 거부, 깨진 파일 건너뜀(경고), `questions_j6`, 그래프 테스트(`create_cli_agent(plan_gate=...)` 실제 조립): 작업 기록 둘 중 J6가 고른 하나만 시스템 프롬프트에 들어감(규칙은 항상, 색인은 전부), `propose_rule` → "저장" → 같은 thread의 다음 모델 호출에 규칙 본문이 들어감(첫 호출에는 없음), "버림"과 비대화는 저장 안 함, 기억 없으면 주입 없음, 20,000자 상한. `test_gate.py`: `complete_plan` 성공 시 작업 기록, 실패 시 없음.
+  - `check.sh lint` 통과 (명령 목록 최신).
+  - `check.sh baseline` 71 failed, 10483 passed(10316 + assistant 167), 26 skipped, 16 errors, 2 warnings. 실패 목록이 기준선과 같다.
+  - 실제 Jev(OpenRouter) J6 한 번: 요청 "로그인 ... 에러 코드가 이상해요", 기록 둘 → `J6:work-...-fix-login` 0.84 통과, `J6:work-...-css-cleanup` 0.02. `J6:<이름>` 키를 받는다. 호출 비용 약 $0.00002.
+- 명세와 다른 점 (SPEC 본문에 반영함):
+  - 규칙 이름은 `rule-<영숫자 슬러그>-<설명 sha256 6자리>`(슬러그가 비면 `rule-<해시>`). 한글만 있는 설명이 모두 `rule-`가 되어 서로 덮어쓰는 것을 막는다. 같은 설명은 같은 이름이라 덮어쓰기는 유지.
+  - `cg.memory.inject` 구간과 상한으로 뺀 사실의 기록은 `tracing.py`가 생기는 M6로 미뤘다.
+  - 기억이 하나도 없으면(규칙이 없고 색인에 항목이 없으면) 주입하지 않는다. 동기 훅도 둔다.
+  - `/remember`는 게이트가 꺼진 세션에서도 저장한다(주입은 안 됨). 설명은 첫 줄 200자에서 자른다. 루트는 `hooks.trust.project_root_for`.
+- 확인한 문제(DECISIONS O3로 그대로 둠, (c)): fork `general-purpose`가 `MemoryInjectionMiddleware`를 물려받는다(조립된 스택 열거로 확인, fork 아님·사용자 선언형·explorer는 없음). SDK fork는 부모의 프롬프트 생성 미들웨어를 이름으로 물려받는 설계다. 영향: fork 작업마다 Jev J6 호출 1회(작업 기록이 있을 때), fork 프롬프트에 기억 주입. 쓰기는 `SubagentWriteBlockMiddleware`로 막혀 있다. 선택지: (a) 그대로 둔다(fork는 부모 프롬프트를 재현), (b) `_subagent_cli_middleware`에 같은 이름의 통과 미들웨어를 넣어 대체, (c) SPEC 5.3 문구를 fork 예외로 고친다. SPEC 5.3에 적었다.
+- `propose_rule`의 description 검증(한 줄, 200자)은 사람이 "저장"을 고른 뒤 `save_rule`에서 한다. 잘못된 설명은 승인 뒤 저장 실패(오류 ToolMessage)가 된다.
+- 확인 못 한 것: 실제 모델 TUI에서 `propose_rule` 질문 화면과 `/remember`는 돌리지 않았다(질문 화면은 M3의 `request_plan_approval`과 같은 ask_user 모양). `tui/widgets/history.py:198`의 `/remember` 주석이 낡았지만 `DC/tui/`라 두었다. `ty`는 돌리지 않았다.
+- 리뷰 뒤 수정 (2026-11-11):
+  - description은 `splitlines()`가 한 줄이어야 한다. 전에는 "\n"만 막아 "\r"이 저장된 뒤 색인에 줄을 지어냈다. 작업 기록 설명과 `/remember` 설명도 `splitlines()`로 첫 줄을 뗀다.
+  - 주입 글의 `<project_memory`, `</project_memory`를 `&lt;`로 바꾼다(본문이 틀을 닫지 못하게).
+  - J6: 계획이 진행 중이면(phase가 idle 아님, 계획 있음) 요청문을 "계획 요구사항 + 새 메시지"로 판정한다. 요구사항만 쓰는 것보다 새 메시지도 넣는 쪽이 작은 변경이라 둘 다 넣었다. SPEC 5.3에 적었다.
+  - 같은 설명의 규칙: `propose_rule` 질문이 "기존 규칙 <이름>을 바꿀까요?"가 되고, `/remember`는 "덮어썼다"로 알린다. `MemoryStore.exists` 추가.
+  - 상한을 틀 안 전체에 건다. 색인 5,000자 초과분은 오래된 줄부터 뺀다. 최종 20,000자 자르기.
+  - 기억 폴더가 resolve 뒤 프로젝트 밖이면 쓰기를 `PermissionError`로 거부. `rebuild_index` 경합은 SPEC 14장 알려진 한계로 적었다.
+  - `propose_rule`은 답을 strip해서 "저장"을 본다. MEMORY.md가 없고 규칙이 없어도 선택된 작업 기록은 주입한다. 폴더 경로는 `ProjectPaths.memory_dir`.
+  - fork 상속은 그대로 둔다 (DECISIONS O3). SPEC 5.3에 예외로 적었다.
+  - 테스트 9개 추가: "\r"·U+2028 설명 거부, 작업 기록 설명 첫 줄, 심볼릭 링크 거부, 틀 태그 무력화, 전체 상한과 최근 색인 유지, 색인 없을 때 선택 기록 유지, 계획 요구사항으로 J6·전송 실패·재개 가드(직접 `before_agent`), 동기 그래프(동기 `before_agent`, `wrap_model_call`, 동기 `propose_rule`, 덮어쓰기 질문, " 저장 " strip). 상한 테스트 여유를 600자로 넓혔다. 재개 가드와 태그 무력화를 일부러 끈 변이에서 각각 해당 테스트가 실패하는 것을 확인했다.
+  - 검사: `check.sh unit` 176 passed. `check.sh lint` 통과. `check.sh baseline` 88 failed, 10475 passed, 26 skipped, 16 errors. 새 실패 17건이 모두 `test_main.py::TestStartupAutoUpdate`이고 기준선과 다르다 (SPEC 13장 2번, 아래 O5로 해결). 원인은 M3의 `_require_typesafe_key`: `os.environ`에 Jev 키가 없으면 종료 코드 1. 같은 테스트가 M5 변경을 stash한 HEAD(M4)에서도 따로 돌리면 2건 실패하고, `OPENROUTER_API_KEY=dummy`로는 37개 모두 통과한다. 같은 날 M5 첫 baseline은 기준선과 같았다. 테스트 순서나 `.env` 로드 여부에 따라 달라지는 기존 문제로 보이며 M5 변경 때문은 아니다.
+  - 순서 의존의 원인: `.env`는 `config.py`의 부트스트랩(`_bootstrap_state`, 프로세스당 한 번)이 `os.environ`에 넣는데, `tests/unit_tests/conftest.py`의 autouse `_restore_os_environ`이 테스트마다 환경을 되돌린다. 그래서 워커에서 부트스트랩을 처음 일으킨 테스트만 저장소 `.env`의 키를 보고, 그 뒤 테스트는 키가 없다. xdist 배분에 따라 결과가 바뀐다.
+  - O5 첫안(호출 위치를 `cli_main` 안에서 옮김)은 두 테스트(`test_yolo_acknowledgement_interrupt_aborts_before_tui`, `test_project_mcp_server_selection_cancel_aborts_before_tui`)를 고치지 못했다. 둘은 `_resolve_agent_arg` 뒤의 프롬프트에서 130을 기대한다.
+  - O5 개정안 적용: `main.py`의 `_require_typesafe_key`와 호출을 지우고, `decider.require_jev_key`(`MissingJevKeyError(ValueError)`)를 `client/launch/server_manager.start_server_and_get_agent` 첫머리(`plan_gate`일 때, MCP 사전 검사 앞)에서 부른다. TUI와 `-n`이 모두 지나는 곳이고 시작 프롬프트 뒤, 서버와 그래프 전이다. 테스트 `assistant/test_launch_key.py` 5개(키 없음 → 오류이고 메시지에 키 값 없음, 키 둘 각각 통과, 기동 경로에서 키 없음 → 서버 전에 오류, 게이트 끔 → 건너뜀, 키 있음 → 통과). 업스트림 테스트와 `check.sh`는 고치지 않았다.
+  - 실행 확인: 임시 프로필과 가짜 모델로 키 없이 `dcode -n` → 종료 코드 1, "Error: 계획 게이트에는 Jev 판정 키가 필요하다 ..."(키 값 없음). `OPENROUTER_API_KEY=dummy` → 종료 코드 0, Task completed.
+  - `test_main.py` 전체: 키 둘을 지운 환경 200 passed, 가짜 키 200 passed.
+  - 최종 검사: `check.sh unit` 182 passed. `check.sh lint` 통과. `check.sh baseline` 88 failed, 10481 passed, 16 errors. 새 실패 17건은 그대로 `TestStartupAutoUpdate`이지만 원인은 키가 아니다(`upgrade` 미호출, `_run_startup_auto_update`를 직접 부르는 테스트).
+  - 해결(DECISIONS.md O6): 업스트림 테스트끼리의 상태 누수다. M0 원본 코드에서도 `test_auth_web_search_restart.py` 다음에 돌리면 같은 17건이 실패한다. `check.sh baseline`이 새 실패를 xdist 없이 따로 다시 돌리게 했다. 다시 돌린 결과: 순서 의존 17건, 따로 돌려도 실패하는 새 실패 0건, 통과.
+  - 재현: `test_auth_web_search_restart.py` 전체(기준선의 16 errors, `Credentials`에 `tavily_api_key` 없음) 뒤에 같은 프로세스에서 `TestStartupAutoUpdate`를 돌리면 17건 실패. HEAD(M4, M5 변경 stash)에서도 같은 순서로 20건 실패(17 + 키 2 + 1). 두 파일 단독은 모두 통과. 업스트림 테스트끼리의 상태 누수이고, M5에서 테스트 수가 바뀌어 xdist가 두 파일을 같은 워커에 놓게 된 것으로 보인다. 누수 지점은 찾지 못했다.
+
+## M6. 추적 — 다음

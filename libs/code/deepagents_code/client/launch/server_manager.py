@@ -394,8 +394,15 @@ async def start_server_and_get_agent(
             missing, or references contradictory transport fields. Raised
             from the pre-flight validator before any subprocess is spawned.
         RuntimeError: If no explicit workspace can be resolved.
+        MissingJevKeyError: The plan gate is on and no Jev key is set.
     """  # noqa: DOC502 - `_preflight_validate_mcp_config()` raises indirectly
     from deepagents_code.client.launch.server import ServerProcess
+
+    if plan_gate:
+        from deepagents_code.assistant.decider import require_jev_key
+
+        # Every launch prompt has run by now; fail before spawning the server.
+        require_jev_key(os.environ)
 
     project_context = (
         ProjectContext.from_user_cwd(Path(cwd))

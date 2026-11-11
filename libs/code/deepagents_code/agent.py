@@ -2665,7 +2665,7 @@ def create_cli_agent(
 
             When `False`, memory is still loaded into context but the read-only
             prompt is used instead, so the agent does not auto-save; explicit
-            saves (e.g. the `remember` skill) still work.
+            saves (e.g. `/remember`) still work.
 
             No effect when
             `enable_memory` is `False`.
@@ -3175,7 +3175,9 @@ def create_cli_agent(
 
         # Loading memory stays on either way; a read-only prompt drops the
         # "proactively persist learnings" guidance when auto-save is disabled.
-        if memory_auto_save and interactive:
+        # The plan gate stores memory through MemoryStore, so AGENTS.md stays
+        # read-only for the agent.
+        if memory_auto_save and interactive and plan_gate is None:
             memory_middleware = MemoryMiddleware(
                 backend=FilesystemBackend(virtual_mode=False),
                 sources=memory_sources,
@@ -3186,7 +3188,7 @@ def create_cli_agent(
                 sources=memory_sources,
                 system_prompt=(
                     _MEMORY_HEADLESS_SYSTEM_PROMPT
-                    if memory_auto_save
+                    if memory_auto_save and plan_gate is None
                     else _MEMORY_READONLY_SYSTEM_PROMPT
                 ),
             )
@@ -3202,6 +3204,18 @@ def create_cli_agent(
         agent_middleware.append(
             ManagedMemoryGuardMiddleware([get_user_agent_md_path(assistant_id)])
         )
+
+        if plan_gate is not None:
+            from deepagents_code.assistant.memory import (
+                MemoryInjectionMiddleware,
+                MemoryStore,
+            )
+
+            agent_middleware.append(
+                MemoryInjectionMiddleware(
+                    MemoryStore(plan_gate.project_root), plan_gate.decider
+                )
+            )
 
     # Add skills middleware
     if enable_skills:

@@ -18717,40 +18717,47 @@ class TestHasConversationMessages:
 
 
 class TestRememberRequiresMessages:
-    """Ensure /remember early-returns only when bare and no conversation exists."""
+    """`/remember` saves a project rule directly (SPEC P11; the skill is gone)."""
 
-    async def test_remember_with_args_no_messages_delegates_to_skill(self) -> None:
-        """/remember with args proceeds even without conversation history."""
-        app = DeepAgentsApp()
+    async def test_remember_with_args_no_messages_delegates_to_skill(
+        self, tmp_path: Path
+    ) -> None:
+        """/remember with args saves the rule even without conversation history."""
+        from deepagents_code.assistant.memory import MemoryStore
+
+        app = DeepAgentsApp(cwd=tmp_path)
         async with app.run_test() as pilot:
             await pilot.pause()
 
-            with (
-                patch.object(app, "_has_conversation_messages", return_value=False),
-                patch.object(app, "_handle_skill_command") as mock_skill,
-            ):
-                await app._handle_command("/remember i like blue")
+            with patch.object(app, "_handle_skill_command") as mock_skill:
+                await app._handle_command("/remember i like blue\nreally")
                 await pilot.pause()
 
-            mock_skill.assert_called_once_with("/skill:remember i like blue")
+            mock_skill.assert_not_called()
+            msgs = app.query(AppMessage)
+            assert "규칙을 저장했다" in str(msgs[-1]._content)
+        (rule,) = MemoryStore(tmp_path).list_records("rule")
+        assert rule.description == "i like blue"
+        assert rule.body == "i like blue\nreally\n"
+        assert rule.source == "user"
 
-    async def test_remember_blank_args_no_messages_shows_early_return(self) -> None:
-        """/remember with whitespace-only args is treated as bare (early-return)."""
-        app = DeepAgentsApp()
+    async def test_remember_blank_args_no_messages_shows_early_return(
+        self, tmp_path: Path
+    ) -> None:
+        """/remember with whitespace-only args asks for the rule text."""
+        app = DeepAgentsApp(cwd=tmp_path)
         async with app.run_test() as pilot:
             await pilot.pause()
 
-            with (
-                patch.object(app, "_has_conversation_messages", return_value=False),
-                patch.object(app, "_handle_skill_command") as mock_skill,
-            ):
+            with patch.object(app, "_handle_skill_command") as mock_skill:
                 await app._handle_command("/remember   ")
                 await pilot.pause()
 
             msgs = app.query(AppMessage)
             assert len(msgs) == 1
-            assert "Nothing to remember yet" in str(msgs[0]._content)
+            assert "저장할 규칙을 함께 적어 주세요" in str(msgs[0]._content)
             mock_skill.assert_not_called()
+        assert not (tmp_path / ".deepagents").exists()
 
 
 class TestSwitchAgentGuards:
