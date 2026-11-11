@@ -22,6 +22,25 @@ SHELL_TOOLS: frozenset[str] = frozenset({"execute"})
 OTHER_MUTATING_TOOLS: frozenset[str] = frozenset(
     {"js_eval", "start_async_task", "update_async_task", "cancel_async_task"}
 )
+# 원격 서브에이전트를 시작하거나 지시를 바꾼다. 원격에는 쓰기 차단이 없다 (P3)
+ASYNC_SUBAGENT_TOOLS: frozenset[str] = frozenset(
+    {"start_async_task", "update_async_task"}
+)
+# 서브에이전트가 쓸 수 있는 도구. 그 밖은 거부한다. execute는 읽기 전용 명령만
+SUBAGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
+    {
+        "ls",
+        "read_file",
+        "glob",
+        "grep",
+        "execute",
+        "ask_user",
+        "compact_conversation",
+        "fetch_url",
+        "web_search",
+        "get_current_thread_id",
+    }
+)
 PLAN_TOOLS: frozenset[str] = frozenset(
     {
         "submit_plan",
@@ -65,6 +84,7 @@ class PlanGateOptions:
     decider: Decider
     reviewer: PlanReviewer
     interactive: bool
+    # 쓰기 계열로 보는 MCP 도구와 확장 도구 이름. create_cli_agent가 확장 이름을 더한다
     mcp_mutating_tool_names: frozenset[str] = frozenset()
     threshold: float = JEV_THRESHOLD_DEFAULT
 

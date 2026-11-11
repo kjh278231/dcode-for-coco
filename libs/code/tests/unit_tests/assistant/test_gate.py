@@ -13,12 +13,14 @@ from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
+from deepagents_code._env_vars import EXPERIMENTAL
 from deepagents_code.agent import create_cli_agent
 from deepagents_code.assistant.decider import FakeDecider
 from deepagents_code.assistant.gate import PlanGateMiddleware, precheck_denies
 from deepagents_code.assistant.options import PHASE_KEY
 from deepagents_code.assistant.plan import PlanStore
 from deepagents_code.assistant.reviewer import ReviewResult
+from deepagents_code.extensions.registry import ExtensionRegistry, SourceInfo
 from tests.unit_tests.assistant.fakes import (
     FakeReviewer,
     make_options,
@@ -29,6 +31,8 @@ from tests.unit_tests.test_end_to_end import FixedGenericFakeChatModel, mock_set
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    import pytest
 
     from deepagents_code.assistant.decider import Decider
 
@@ -55,6 +59,20 @@ def task(description: str, subagent_type: str) -> str:
     """
     del description, subagent_type
     return "## 관련 파일\n- app.py: add 버그"
+
+
+ASYNC_STARTS: list[str] = []
+
+
+@tool
+def start_async_task(description: str) -> str:
+    """원격 서브에이전트를 시작한 척한다.
+
+    Returns:
+        작업 id.
+    """
+    ASYNC_STARTS.append(description)
+    return "job-1"
 
 
 def plan_args(**changes: Any) -> dict[str, Any]:
@@ -108,7 +126,7 @@ class Harness:
         )
         self.agent = create_agent(
             model=scripted_model(script),
-            tools=[task],
+            tools=[task, start_async_task],
             middleware=[
                 FilesystemMiddleware(backend=backend),
                 PlanGateMiddleware(options, backend),
@@ -277,6 +295,19 @@ async def test_g11_protected_dir_denied_before_and_after_approval(
     second = await h.resume("승인")
     assert tool_result(second, "w2").status == "error"
     assert not (tmp_path / protected).exists()
+
+
+async def test_g12_general_purpose_task_denied_before_approval(
+    tmp_path: Path,
+) -> None:
+    call = tool_call(
+        "task", {"description": "고쳐", "subagent_type": "general-purpose"}, "g"
+    )
+    h = Harness(tmp_path, [call, done()])
+    result = await h.say("app.py 버그 고쳐줘")
+    message = tool_result(result, "g")
+    assert message.status == "error"
+    assert "app.py" not in str(message.content)  # 가짜 task 본문이 돌지 않았다
 
 
 async def test_g14_headless_approval_by_next_message(tmp_path: Path) -> None:
@@ -456,6 +487,9 @@ def test_precheck_denies_only_sure_denials() -> None:
     assert not precheck_denies(
         {PHASE_KEY: "idle"}, {"name": "execute", "args": {"command": "ls"}}
     )
+    assert precheck_denies(
+        {PHASE_KEY: "executing"}, {"name": "start_async_task", "args": {}}
+    )
 
 
 async def test_failed_write_does_not_extend_targets(tmp_path: Path) -> None:
@@ -514,3 +548,65 @@ async def test_second_plan_in_thread_gets_its_own_review_rounds(
     plan = PlanStore(tmp_path).load(second)
     assert plan.status == "draft"
     assert plan.review_round == 1
+
+
+async def test_task_after_approval_runs(tmp_path: Path) -> None:
+    """승인 뒤 task는 통과한다. 쓰기는 서브에이전트 안에서 막힌다 (test_subagents)."""
+    call = tool_call(
+        "task", {"description": "읽어", "subagent_type": "general-purpose"}, "g"
+    )
+    h = await approved(tmp_path, [call, done()])
+    message = tool_result(h.last, "g")  # type: ignore[attr-defined]
+    assert message.status != "error"
+    assert "app.py" in str(message.content)
+
+
+async def test_async_subagent_denied_after_approval(tmp_path: Path) -> None:
+    ASYNC_STARTS.clear()
+    call = tool_call("start_async_task", {"description": "app.py 고쳐"}, "r")
+    h = await approved(tmp_path, [call, done()])
+    message = tool_result(h.last, "r")  # type: ignore[attr-defined]
+    assert message.status == "error"
+    assert "원격 서브에이전트" in str(message.content)
+    assert ASYNC_STARTS == []
+
+
+async def test_extension_tool_is_mutating_before_approval(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """확장 도구는 주석 없는 MCP처럼 승인 전에 거부된다. 승인 뒤는 J4 (test_policy)."""
+    monkeypatch.setenv(EXPERIMENTAL, "1")
+    target = tmp_path / "ext.txt"
+
+    @tool("ext_write")
+    def ext_write() -> str:
+        """확장 도구가 파일을 쓴다.
+
+        Returns:
+            완료 문구.
+        """
+        target.write_text("x")
+        return "ok"
+
+    registry = ExtensionRegistry()
+    registry.add_tool(ext_write, SourceInfo(tmp_path / "extension.py"))
+    model = FixedGenericFakeChatModel(
+        messages=iter([tool_call("ext_write", {}, "x"), done()])
+    )
+    with mock_settings(tmp_path):
+        agent, _ = create_cli_agent(
+            model=model,
+            assistant_id="test-agent",
+            tools=[],
+            auto_approve=True,
+            cwd=tmp_path,
+            checkpointer=InMemorySaver(),
+            plan_gate=make_options(tmp_path),
+            extension_registry=registry,
+        )
+        result = await agent.ainvoke(
+            {"messages": [HumanMessage(content="써줘")]},
+            {"configurable": {"thread_id": str(uuid.uuid4())}},
+        )
+    assert tool_result(result, "x").status == "error"
+    assert not target.exists()

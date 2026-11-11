@@ -95,4 +95,28 @@
 - 확인된 열린 길 (M4에서 닫는다): 승인 뒤 게이트는 `task`를 `targets`와 J4 없이 통과시킨다. 사용자 선언형 서브에이전트와 `DEEPAGENTS_CODE_FORKED_SUBAGENTS=0`일 때의 `general-purpose`는 범위 밖 파일을 쓸 수 있다.
 - 확인 못 한 것: 탐색 서브에이전트의 실제 도구 목록(M4 검사). `ty`는 돌리지 않았다.
 
-## M4. 서브에이전트 — 다음
+## M4. 서브에이전트 — 완료 (2026-11-11)
+
+- 추가: `gate.py`의 `SubagentWriteBlockMiddleware`, `tests/unit_tests/assistant/test_subagents.py`. `test_gate.py`에 G12와 승인 뒤 `task` 통과 테스트.
+- 수정(업스트림): `agent.py`의 `_subagent_cli_middleware` 끝에 `plan_gate`가 있으면 `SubagentWriteBlockMiddleware`를 더한다. 사용자 선언형, `general-purpose`(fork와 fork 아님), 탐색 서브에이전트가 모두 이 목록을 쓴다.
+- 먼저 확인한 [미확인] (fork 서브에이전트의 최종 도구 목록, SDK `create_agent`를 감싸 열거):
+  - 고치기 전: fork `general-purpose`가 `PlanGateMiddleware`를 이름 그대로 물려받아 `submit_plan`, `request_plan_approval`, `complete_plan`이 도구 노드에 있었다. 리뷰어가 본 것과 같다. SPEC의 가정(같은 이름이면 사양 쪽이 대신한다, `SDK/graph.py:774`)과 어긋나지 않는다.
+  - 고친 뒤: 그 자리가 `SubagentWriteBlockMiddleware`로 바뀌고 계획 도구가 빠졌다. `write_file, edit_file, delete, execute, task`는 도구 노드에 남는다(등록됨, 모델 목록에서 빠짐, 호출 거부).
+- 검사:
+  - `check.sh unit` 149 passed. G12, G13, 세 구성(fork `general-purpose`, `DEEPAGENTS_CODE_FORKED_SUBAGENTS=0`의 `general-purpose`, 사용자 선언형) 각각 실제 조립된 서브에이전트 그래프에 `write_file`을 돌려 파일이 생기지 않고 계획 도구가 없는지, 탐색 서브에이전트 도구가 `ls, read_file, glob, grep`뿐인지.
+  - `check.sh lint` 통과.
+  - `check.sh baseline` 71 failed, 10465 passed(10316 + assistant 149), 26 skipped, 16 errors, 2 warnings. 실패 목록이 기준선과 같다.
+- 리뷰 뒤 수정 (2026-11-11):
+  - 원격 비동기 서브에이전트 `start_async_task`, `update_async_task`를 단계와 관계없이 거부한다(`policy.classify_call` 규칙 1a, 사유 `async_subagent`, `precheck_denies`도 True). 전에는 승인 뒤 J4로 갔는데 J4는 도구 이름만 받고 원격에는 쓰기 차단이 없다. P3에 맞췄다. `cancel_async_task`는 J4에 남는다.
+  - `SubagentWriteBlockMiddleware`를 허용 목록으로 바꿨다: `ls, read_file, glob, grep`, 읽기 전용 `execute`, `ask_user, compact_conversation, fetch_url, web_search, get_current_thread_id`, 읽기 전용 주석이 맞는 MCP 도구. 생성자 둘째 인자는 `read_only_tool_names`. 그 밖(확장 도구, fork의 `update_goal`, 읽기 전용이 아닌 MCP)은 거부된다.
+  - 사용자 결정: 확장 도구 이름을 주 게이트에서 쓰기 계열로 본다. `create_cli_agent` 첫머리에서 `plan_gate.mcp_mutating_tool_names`에 더한다. 승인 전 거부, 승인 뒤 J4.
+  - 테스트: 정책 규칙 1a(2), 승인 뒤 `start_async_task` 거부(가짜 도구 본문이 돌지 않음), 확장 도구 승인 전 거부(실제 `create_cli_agent`와 `ExtensionRegistry`), 주 에이전트 `task` → SDK 서브에이전트 → `write_file` 거부, 세 구성 테스트에 거부 문구 단언. 차단기와 확장 이름 연결을 일부러 끈 변이에서 새 테스트 5개가 실패하는 것을 확인했다.
+  - 검사: `check.sh unit` 154 passed. `check.sh lint` 통과. `check.sh baseline` 71 failed, 10470 passed(10316 + assistant 154), 26 skipped, 16 errors, 2 warnings. 실패 목록이 기준선과 같다.
+- 고친 M3 버그: 게이트 `_decide`의 `task` 분기가 값 둘을 돌려줘 explorer가 아닌 `task`는 승인 전후 모두 `ValueError`로 죽었다. G12가 찾았다.
+- 명세와 다른 점 (SPEC 본문에 반영함):
+  - 차단기는 거부 목록이 아니라 허용 목록이다(리뷰 뒤 수정). `execute`는 모델 목록에 남고 읽기 전용 명령만 통과한다(주 게이트와 같다).
+  - 원격 비동기 서브에이전트 시작과 지시 변경은 승인 뒤에도 거부한다. 확장 도구는 주 게이트에서 쓰기 계열이다(사용자 결정).
+- 확인한 문제(고치지 않음): 서브에이전트에는 phase가 없어 `precheck_denies`가 False다. 자동 승인이 아니면 서브에이전트의 쓰기 호출에 dcode 승인 화면이 먼저 뜨고 그 뒤에 거부된다. 쓰기 도구는 모델 목록에서 빠져 있어 모델이 이름을 지어낼 때만 생긴다.
+- 확인 못 한 것: 실제 모델 TUI는 돌리지 않았다. 허용 목록 때문에 서브에이전트에서 읽기 전용 주석이 없는 MCP 도구와 확장 도구, fork의 `update_goal`이 막힌다. 그런 도구에 기대는 사용자 서브에이전트는 실제로 확인하지 않았다. `ty`는 돌리지 않았다.
+
+## M5. Memory — 다음

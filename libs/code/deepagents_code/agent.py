@@ -2789,6 +2789,13 @@ def create_cli_agent(
         EXPERIMENTAL, environ=environment
     ):
         extension_registry = None
+    if plan_gate is not None and extension_registry is not None:
+        # 확장 도구는 주석 없는 MCP처럼 쓰기 계열로 본다 (승인 전 거부, 승인 뒤 J4)
+        plan_gate = replace(
+            plan_gate,
+            mcp_mutating_tool_names=plan_gate.mcp_mutating_tool_names
+            | {unit.name for unit in extension_registry.tool_units()},
+        )
     mcp_tools = tuple(mcp_tools or ())
     from deepagents_code.config_manifest import get_option
     from deepagents_code.configuration.resolver import get_config_resolver
@@ -2974,6 +2981,18 @@ def create_cli_agent(
             )
         if provider_tool_search and mcp_tools:
             middleware.append(MCPProviderToolSearchMiddleware(mcp_tools))
+        if plan_gate is not None:
+            from deepagents_code.assistant.gate import SubagentWriteBlockMiddleware
+
+            # 같은 이름이라 fork가 물려받는 PlanGateMiddleware를 대신한다
+            read_only_mcp = {
+                t.name for t in mcp_tools
+            } - plan_gate.mcp_mutating_tool_names
+            middleware.append(
+                SubagentWriteBlockMiddleware(
+                    plan_gate.project_root, frozenset(read_only_mcp)
+                )
+            )
         return middleware
 
     from deepagents_code._cli_context import INHERIT_CLASSIFIER_MODEL

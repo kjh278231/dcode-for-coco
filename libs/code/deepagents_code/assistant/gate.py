@@ -25,6 +25,7 @@ from deepagents_code.assistant.decider import question_j4, question_j5
 from deepagents_code.assistant.options import (
     APPROVE_WORDS,
     APPROVED_HUMAN_ID_KEY,
+    ASYNC_SUBAGENT_TOOLS,
     EXPLORED_KEY,
     EXPLORER_SUBAGENT_NAME,
     LAST_HUMAN_ID_KEY,
@@ -36,6 +37,8 @@ from deepagents_code.assistant.options import (
     REJECT_WORDS,
     REQUEST_TEXT_KEY,
     REVIEW_ROUND_KEY,
+    SHELL_TOOLS,
+    SUBAGENT_ALLOWED_TOOLS,
     WRITE_PATH_TOOLS,
 )
 from deepagents_code.assistant.plan import (
@@ -46,6 +49,7 @@ from deepagents_code.assistant.plan import (
 )
 from deepagents_code.assistant.policy import (
     classify_call,
+    is_read_only_shell,
     normalize_tool_path,
     relative_target,
     summarize_call,
@@ -55,6 +59,7 @@ from deepagents_code.assistant.tools import build_plan_tools
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Mapping
+    from pathlib import Path
 
     from deepagents.backends.protocol import BackendProtocol
     from langchain.agents.middleware.types import (
@@ -76,6 +81,10 @@ _DENY_TEXT = {
     "bad_path": "경로를 해석할 수 없다.",
     "out_of_scope": "승인된 계획의 범위 밖이다. 필요하면 submit_plan으로 계획을 고쳐 "
     "재검토를 받아라.",
+    "async_subagent": "원격 서브에이전트는 쓰기를 막을 수 없어 계획 게이트가 "
+    "켜져 있으면 시작하거나 지시를 바꿀 수 없다.",
+    "subagent_read_only": "서브에이전트는 읽기 전용이다. 파일 변경과 쓰기 명령은 "
+    "주 에이전트만 한다. 필요한 변경은 결과에 적어 돌려줘라.",
 }
 _J5_YES = "\n\n[판정] 이 요청은 코드 변경이 필요하다. submit_plan으로 계획을 제출하라."
 _J5_NO = "\n\n[판정] 이 요청은 코드 변경이 필요 없어 보인다. 탐색 결과로 답하라."
@@ -111,9 +120,12 @@ def precheck_denies(state: object, tool_call: object) -> bool:
     if not isinstance(state, dict) or not isinstance(tool_call, dict):
         return False
     phase = state.get(PHASE_KEY)
-    if phase is None or phase == "executing":
+    if phase is None:
         return False
-    return tool_call.get("name") in WRITE_PATH_TOOLS | OTHER_MUTATING_TOOLS
+    name = tool_call.get("name")
+    if name in ASYNC_SUBAGENT_TOOLS:
+        return True  # 단계와 관계없이 거부된다
+    return phase != "executing" and name in WRITE_PATH_TOOLS | OTHER_MUTATING_TOOLS
 
 
 def _last_human(messages: list[Any]) -> HumanMessage | None:
@@ -310,15 +322,10 @@ class PlanGateMiddleware(AgentMiddleware):
         if name == "task":
             if args.get("subagent_type") == EXPLORER_SUBAGENT_NAME:
                 return "explore", "explorer", None
-            # shortcut: 승인 뒤 task의 쓰기 차단은 M4 SubagentWriteBlockMiddleware
-            return (
-                ("allow", "task")
-                if phase == "executing"
-                else (
-                    "deny",
-                    "no_approved_plan",
-                )
-            )
+            # 승인 뒤에도 서브에이전트는 SubagentWriteBlockMiddleware로 읽기 전용이다
+            if phase == "executing":
+                return "allow", "task", None
+            return "deny", "no_approved_plan", None
         plan = self._load(state.get(PLAN_ID_KEY)) if phase == "executing" else None
         last = state.get(LAST_HUMAN_ID_KEY)
         fresh = last is not None and state.get(APPROVED_HUMAN_ID_KEY) == last
@@ -431,3 +438,97 @@ class PlanGateMiddleware(AgentMiddleware):
             self._extend_targets, request.state.get(PLAN_ID_KEY), target, result
         )
         return result
+
+
+class SubagentWriteBlockMiddleware(AgentMiddleware):
+    """서브에이전트에 허용 목록의 도구만 열어 둔다.
+
+    서브에이전트는 비공개 상태를 받지 못해 단계와 `targets`를 모른다. 범위 검사를
+    할 수 없으므로 승인 뒤에도 읽기 도구만 쓴다 (SPEC 12장 P3). 목록에 없는 도구
+    (쓰기, 계획 도구, `task`, 확장 도구, 읽기 전용이 아닌 MCP)는 거부한다.
+    """
+
+    trace_policy = TracePolicy(process_inputs=omit_payload)
+
+    def __init__(
+        self,
+        project_root: Path,
+        read_only_tool_names: frozenset[str] = frozenset(),
+    ) -> None:
+        """차단기를 만든다.
+
+        Args:
+            project_root: 프로젝트 루트. 읽기 전용 셸 판정에 쓴다.
+            read_only_tool_names: 더 허용할 읽기 전용 도구 이름 (MCP).
+        """
+        super().__init__()
+        self._project_root = project_root
+        self._allowed = SUBAGENT_ALLOWED_TOOLS | read_only_tool_names
+
+    @property
+    def name(self) -> str:
+        """미들웨어 이름. fork가 물려받는 PlanGateMiddleware를 이 이름으로 바꾼다."""
+        return PLAN_GATE_MIDDLEWARE_NAME
+
+    def _hide(self, request: ModelRequest) -> ModelRequest:
+        tools = [t for t in request.tools if tool_name_of(t) in self._allowed]
+        return request.override(tools=tools)
+
+    def _denied(self, request: ToolCallRequest) -> bool:
+        name = request.tool_call["name"]
+        if name in SHELL_TOOLS:
+            args = request.tool_call.get("args") or {}
+            return not is_read_only_shell(args.get("command"), self._project_root)
+        return name not in self._allowed
+
+    def wrap_model_call(
+        self,
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], ModelResponse],
+    ) -> ModelResponse:
+        """허용 목록 밖의 도구를 모델에게 보이지 않는다.
+
+        Returns:
+            모델 응답.
+        """
+        return handler(self._hide(request))
+
+    async def awrap_model_call(
+        self,
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], Awaitable[ModelResponse]],
+    ) -> ModelResponse:
+        """허용 목록 밖의 도구를 모델에게 보이지 않는다.
+
+        Returns:
+            모델 응답.
+        """
+        return await handler(self._hide(request))
+
+    def wrap_tool_call(
+        self,
+        request: ToolCallRequest,
+        handler: Callable[[ToolCallRequest], ToolMessage | Command[Any]],
+    ) -> ToolMessage | Command[Any]:
+        """허용 목록 밖의 호출을 거부한다. `execute`는 읽기 전용 명령만 통과시킨다.
+
+        Returns:
+            도구 결과 또는 거부 메시지.
+        """
+        if self._denied(request):
+            return _deny(request, "subagent_read_only")
+        return handler(request)
+
+    async def awrap_tool_call(
+        self,
+        request: ToolCallRequest,
+        handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command[Any]]],
+    ) -> ToolMessage | Command[Any]:
+        """허용 목록 밖의 호출을 거부한다. `execute`는 읽기 전용 명령만 통과시킨다.
+
+        Returns:
+            도구 결과 또는 거부 메시지.
+        """
+        if await asyncio.to_thread(self._denied, request):
+            return _deny(request, "subagent_read_only")
+        return await handler(request)

@@ -94,7 +94,7 @@ libs/code/tests/unit_tests/assistant/
 | `DC/_server_config.py` | `ServerConfig.plan_gate` 필드와 직렬화 | M3 |
 | `DC/client/launch/server_manager.py` | `ServerConfig.from_cli_args` 호출에 `plan_gate` 전달 | M3 |
 | `DC/server_graph.py` | `create_cli_agent`에 옵션 전달, `make_graph`에 Langfuse 핸들러 | M3, M6 |
-| `DC/agent.py` | `create_cli_agent` 인자, 미들웨어와 서브에이전트 등록, 승인 술어 | M3, M4 |
+| `DC/agent.py` | `create_cli_agent` 인자, 미들웨어와 서브에이전트 등록, 승인 술어. [M4] `_subagent_cli_middleware`에 `SubagentWriteBlockMiddleware`, 확장 도구 이름을 `plan_gate.mcp_mutating_tool_names`에 더함 | M3, M4 |
 | `DC/main.py` | 키 사전 검사, LangSmith 기본 끄기 | M3, M6 |
 | `DC/client/non_interactive.py` | `server_session` 호출에 `plan_gate` 전달 | M3 |
 | `libs/code/scripts/check_process_cwd.py` | `run_non_interactive`의 `Path.cwd` 허용 항목 토큰 `99c1d085` → `86fa45ed` (사유 문구 그대로). 같은 문장에 `plan_gate=`를 더해 토큰이 바뀌었다 | M3 |
@@ -116,6 +116,13 @@ WRITE_PATH_TOOLS: frozenset[str] = frozenset({"write_file", "edit_file", "delete
 SHELL_TOOLS: frozenset[str] = frozenset({"execute"})
 OTHER_MUTATING_TOOLS: frozenset[str] = frozenset(
     {"js_eval", "start_async_task", "update_async_task", "cancel_async_task"}
+)
+# [M4] 원격 서브에이전트를 시작하거나 지시를 바꾸는 도구. 단계와 관계없이 거부한다
+ASYNC_SUBAGENT_TOOLS: frozenset[str] = frozenset({"start_async_task", "update_async_task"})
+# [M4] 서브에이전트 허용 목록. 그 밖은 거부. execute는 읽기 전용 명령만
+SUBAGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
+    {"ls", "read_file", "glob", "grep", "execute", "ask_user", "compact_conversation",
+     "fetch_url", "web_search", "get_current_thread_id"}
 )
 PLAN_TOOLS: frozenset[str] = frozenset(
     {"submit_plan", "request_plan_approval", "complete_plan", "propose_rule", "propose_improvement"}
@@ -146,7 +153,7 @@ class PlanGateOptions:
     threshold: float = JEV_THRESHOLD_DEFAULT
 ```
 
-게이트 대상 도구를 dcode의 승인 맵(`DC/agent.py:2365` `_add_interrupt_on`)에서 얻지 않고 상수로 둔다. [확인] 그 맵은 `--yolo`나 비대화에서 아예 만들어지지 않고 (`DC/agent.py:2969`), `web_search`, `fetch_url`, `task`처럼 쓰기가 아닌 도구도 담는다. MCP 도구만 기존 함수 `gated_mcp_tool_names` (`DC/auto_mode.py:773`)로 얻어 `mcp_mutating_tool_names`에 넣는다.
+게이트 대상 도구를 dcode의 승인 맵(`DC/agent.py:2365` `_add_interrupt_on`)에서 얻지 않고 상수로 둔다. [확인] 그 맵은 `--yolo`나 비대화에서 아예 만들어지지 않고 (`DC/agent.py:2969`), `web_search`, `fetch_url`, `task`처럼 쓰기가 아닌 도구도 담는다. MCP 도구만 기존 함수 `gated_mcp_tool_names` (`DC/auto_mode.py:773`)로 얻어 `mcp_mutating_tool_names`에 넣는다. [M4, 사용자 결정] 확장 도구(`extension_registry.tool_units()`, `DEEPAGENTS_CODE_EXPERIMENTAL`일 때만)의 이름도 `create_cli_agent` 첫머리에서 이 필드에 더한다. 주석 없는 MCP처럼 승인 전에는 거부하고 승인 뒤에는 J4를 거친다. 내장 도구의 분류는 그대로다. 확장이 내장 도구와 같은 이름으로 덮어쓰면 그 이름도 쓰기 계열이 된다.
 
 **단계(phase).** 문자열 리터럴 넷이다.
 
@@ -494,6 +501,7 @@ def classify_call(
 | # | 조건 | 결과 | 사유 코드 |
 |---|---|---|---|
 | 1 | 도구가 `PLAN_TOOLS`에 있다 | allow | `plan_tool` |
+| 1a | 도구가 `ASYNC_SUBAGENT_TOOLS`에 있다 [M4] | deny | `async_subagent` |
 | 2 | `WRITE_PATH_TOOLS`이고 경로를 정규화할 수 없다 | deny | `bad_path` |
 | 3 | `WRITE_PATH_TOOLS`이고 `is_protected`다 | deny | `protected_path` |
 | 4 | `execute`이고 `is_read_only_shell`이다 | allow | `read_only_shell` |
@@ -503,7 +511,9 @@ def classify_call(
 | 8 | `WRITE_PATH_TOOLS`이고 상대 경로가 `targets`에 있고 `fresh_approval`이다 | allow | `in_targets` |
 | 9 | 그 밖 | needs_scope_check | `scope_check` |
 
-쓰기 계열은 `WRITE_PATH_TOOLS | SHELL_TOOLS | OTHER_MUTATING_TOOLS | mcp_mutating`이다.
+쓰기 계열은 `WRITE_PATH_TOOLS | SHELL_TOOLS | OTHER_MUTATING_TOOLS | mcp_mutating`이다. `mcp_mutating`에는 확장 도구 이름도 들어 있다 [M4].
+
+[M4] 1a의 이유. 원격 비동기 서브에이전트(`start_async_task`, `update_async_task`)는 다른 서버에서 돌아 쓰기 차단이 없고, J4는 `summarize_call`로 도구 이름만 받아 범위를 판단할 수 없다. P3에 맞춰 승인 뒤에도 거부한다. `cancel_async_task`는 쓰기를 늘리지 않으므로 9번(J4)에 남는다.
 
 [확인] `is_shell_command_allowed` (`DC/config.py:4537`)와 `_fixed_repo_command_allowed` (`DC/auto_mode.py:2480`)는 인자만 쓰는 순수 함수다. 앞의 것은 첫 토큰 이름만 보고 리다이렉션과 명령 치환을 거부한다. 뒤의 것은 읽기 전용 git 하위 명령만 통과시킨다. 뒤의 것은 이름이 `_`로 시작하는 비공개 함수다. 같은 패키지 안에서 import하고, 그 줄에 이유를 주석으로 적는다.
 
@@ -843,25 +853,30 @@ ToolMessage(content=<사유 문장>, name=request.tool_call["name"],
 
 ```python
 class SubagentWriteBlockMiddleware(AgentMiddleware):
-    """서브에이전트의 쓰기 계열 도구 호출을 항상 거부한다."""
+    """서브에이전트에 허용 목록의 도구만 열어 둔다."""
 
     trace_policy = TracePolicy(process_inputs=omit_payload)
 
-    def __init__(self, project_root: Path, mcp_mutating_tool_names: frozenset[str] = frozenset()) -> None: ...
+    def __init__(self, project_root: Path, read_only_tool_names: frozenset[str] = frozenset()) -> None: ...
+    # [M4] 허용 목록 = SUBAGENT_ALLOWED_TOOLS | read_only_tool_names(읽기 전용 주석이 맞는 MCP 이름).
+    # 처음 설계는 거부 목록이었다. 목록에 없는 도구(확장 도구, update_goal 등)가 통과해 허용 목록으로 바꿨다
 
     @property
     def name(self) -> str:
         """PLAN_GATE_MIDDLEWARE_NAME을 돌려준다. PlanGateMiddleware와 같은 이름이다."""
 
-    # wrap_model_call / awrap_model_call: 쓰기 계열 도구와 PLAN_TOOLS를 목록에서 뺀다
+    # wrap_model_call / awrap_model_call: 허용 목록 밖의 도구를 목록에서 뺀다 (execute는 남는다)
     # wrap_tool_call / awrap_tool_call:
-    #   쓰기 계열이면 거부. 단 execute는 policy.is_read_only_shell이면 통과
-    #   PLAN_TOOLS와 task도 거부
+    #   허용 목록 밖이면 거부 (쓰기, PLAN_TOOLS, task, 확장 도구 포함)
+    #   execute는 policy.is_read_only_shell일 때만 통과
 ```
 
 이름을 주 게이트와 같게 두는 이유. [확인] 기본 `general-purpose` 서브에이전트는 fork 모드라서 부모의 미들웨어를 물려받는다. 사양에 같은 이름의 미들웨어가 있으면 사양 쪽이 부모 것을 대신한다 (`SDK/graph.py:774`). 같은 이름으로 두면 물려받은 `PlanGateMiddleware`가 `SubagentWriteBlockMiddleware`로 바뀐다. 계획 도구가 서브에이전트에 노출되지 않는다.
 
-[미확인] fork 서브에이전트의 최종 미들웨어와 도구 목록. M4에서 그래프를 만든 뒤 서브에이전트의 도구를 열거해 확인한다.
+[실행 확인, M4] fork 서브에이전트의 최종 미들웨어와 도구 목록. `create_cli_agent(plan_gate=...)`로 그래프를 만들고 SDK의 `create_agent`를 감싸 서브에이전트별 미들웨어와 도구 노드를 열거했다.
+- 고치기 전: fork `general-purpose`가 `PlanGateMiddleware`를 이름 그대로 물려받아 `submit_plan`, `request_plan_approval`, `complete_plan`이 도구 노드에 있었다. 도구는 `ask_user, compact_conversation, delete, edit_file, execute, glob, grep, ls, read_file, task, update_goal, write_file`과 계획 도구 셋.
+- 고친 뒤: 그 자리가 `SubagentWriteBlockMiddleware`로 바뀌고 계획 도구가 빠졌다. `write_file`, `edit_file`, `delete`, `execute`, `task`는 `FilesystemMiddleware`와 `_ForkTaskToolMiddleware`가 붙여 도구 노드에 남는다. 모델 목록에서 빠지고 호출은 거부된다.
+- fork가 아닌 `general-purpose`와 사용자 선언형 서브에이전트에도 `SubagentWriteBlockMiddleware`가 들어간다. 탐색 서브에이전트의 도구는 `glob, grep, ls, read_file`뿐이다.
 
 ### 3.8 탐색 서브에이전트 (`subagents.py`)
 
@@ -925,7 +940,8 @@ if plan_gate is not None:
 
 ```python
 if plan_gate is not None:
-    middleware.append(SubagentWriteBlockMiddleware(plan_gate.project_root, plan_gate.mcp_mutating_tool_names))
+    read_only_mcp = {t.name for t in mcp_tools} - plan_gate.mcp_mutating_tool_names
+    middleware.append(SubagentWriteBlockMiddleware(plan_gate.project_root, frozenset(read_only_mcp)))
 ```
 
 이 함수는 사용자 정의 서브에이전트와 `general-purpose` 양쪽에 쓰이므로 한 곳에서 모두 덮인다.
@@ -941,7 +957,7 @@ if precheck_denies(request.state, request.tool_call):
     return False
 ```
 
-`precheck_denies`는 `gate.py`의 모듈 함수다. 상태에 `_cg_phase`가 없으면(게이트가 꺼져 있으면) False다. [M3] 승인 술어에서는 프로젝트 루트를 알 수 없어서 `classify_call`을 부르지 않고, 루트 없이 확정되는 거부만 True로 한다. phase가 executing이 아니고 도구가 `WRITE_PATH_TOOLS | OTHER_MUTATING_TOOLS`인 경우다. `execute`, MCP, 승인 뒤의 보호 경로는 승인 화면을 거친 뒤 게이트가 거부한다. Jev가 필요한 경우는 False로 둔다. 그 경우 사용자가 승인한 뒤 J4가 거부할 수 있고, 그것은 받아들인다.
+`precheck_denies`는 `gate.py`의 모듈 함수다. 상태에 `_cg_phase`가 없으면(게이트가 꺼져 있으면) False다. [M3] 승인 술어에서는 프로젝트 루트를 알 수 없어서 `classify_call`을 부르지 않고, 루트 없이 확정되는 거부만 True로 한다. phase가 executing이 아니고 도구가 `WRITE_PATH_TOOLS | OTHER_MUTATING_TOOLS`인 경우, 그리고 [M4] phase와 관계없이 `ASYNC_SUBAGENT_TOOLS`인 경우다. `execute`, MCP, 승인 뒤의 보호 경로는 승인 화면을 거친 뒤 게이트가 거부한다. Jev가 필요한 경우는 False로 둔다. 그 경우 사용자가 승인한 뒤 J4가 거부할 수 있고, 그것은 받아들인다.
 
 **승인 모드와의 관계.** 계획 게이트는 `--yolo`, 자동 승인, 세션 중 "항상 승인"과 무관하게 동작한다. 그 모드들은 도구별 승인 화면만 줄인다.
 
@@ -1840,7 +1856,7 @@ G1과 G5는 README의 T4와 T3에 대응한다.
 
 [실행 확인, M3] 탐색 서브에이전트(`subagents.py`, `create_cli_agent` 등록, `_inject_fs_tools_into_subagents`에서 건너뛰기)를 M3로 당겼다. 없으면 `task(explorer)`가 "does not exist" 문자열을 돌려주고 게이트가 그것을 탐색 결과로 받는다. 사용자가 확정했다.
 
-M3에서 확인한 열린 길 (M4에서 닫는다): 승인 뒤(phase executing) 게이트는 `task`를 `targets`와 J4 없이 통과시킨다 (`gate.py`의 `_decide`). 사용자 정의 선언형 서브에이전트와, `DEEPAGENTS_CODE_FORKED_SUBAGENTS=0`일 때의 `general-purpose`는 부모 게이트를 물려받지 않아 범위 밖 파일을 쓸 수 있다. M4의 `SubagentWriteBlockMiddleware`가 이 길을 닫는다.
+M3에서 확인한 열린 길 (M4에서 닫는다): 승인 뒤(phase executing) 게이트는 `task`를 `targets`와 J4 없이 통과시킨다 (`gate.py`의 `_decide`). 사용자 정의 선언형 서브에이전트와, `DEEPAGENTS_CODE_FORKED_SUBAGENTS=0`일 때의 `general-purpose`는 부모 게이트를 물려받지 않아 범위 밖 파일을 쓸 수 있다. M4의 `SubagentWriteBlockMiddleware`가 이 길을 닫는다. [M4] 닫았다. 같은 자리의 `task` 분기가 값 둘을 돌려줘 `awrap_tool_call`이 `ValueError`로 죽던 버그도 G12가 찾아 고쳤다.
 
 M3에서 미룬 것: `_cg_counters`와 `aafter_agent`는 소비자인 `tracing.py`와 함께 M6. `propose_rule`은 M5, `propose_improvement`는 M7.
 
@@ -1913,7 +1929,7 @@ README에 함께 적는 것. 필요한 키와 없을 때의 동작, 게이트 �
 |---|---|---|---|
 | P1 | 계획은 에이전트가 `submit_plan` 도구로 내용을 넘기고 게이트 코드가 파일을 쓴다 | 에이전트가 파일을 직접 쓴다 | 대안은 계획 폴더 쓰기 금지와 충돌한다 |
 | P2 | LLM 리뷰어는 게이트 코드가 직접 부르는 모델 호출이다 | 리뷰어 서브에이전트 | 대안은 리뷰 실행을 모델의 선택에 맡긴다 |
-| P3 | 서브에이전트는 승인 뒤에도 항상 읽기 전용이다 | 승인 뒤 쓰기 허용 | 대안은 서브에이전트 안에서 범위 검사를 할 수 없다. 제안은 쓰기 위임을 못 쓰게 한다 |
+| P3 | 서브에이전트는 승인 뒤에도 항상 읽기 전용이다 | 승인 뒤 쓰기 허용 | 대안은 서브에이전트 안에서 범위 검사를 할 수 없다. 제안은 쓰기 위임을 못 쓰게 한다. [M4] 원격 비동기 서브에이전트의 시작과 지시 변경(`start_async_task`, `update_async_task`)도 승인 뒤까지 거부한다. 서브에이전트 차단은 허용 목록이다 |
 | P4 | `DEEPAGENTS_CODE_PLAN_GATE=0`으로 게이트와 키 검사를 끌 수 있다 | 스위치 없음 | 대안은 `dcode`를 서브프로세스로 띄우는 통합 테스트와 가짜 모델 점검이 깨진다. 제안은 "키 없으면 못 쓴다"에 구멍을 낸다 |
 | P5 | Jev 임계값 0.5에서 시작해 보정으로 조정한다 | 고정 | Jev의 답이 확률이라 자르는 기준이 필요하다 |
 | P6 | 작업의 끝은 `complete_plan` 도구이고 게이트가 `test_command`를 직접 실행한다 | 모델이 테스트 결과를 보고한다 | 제안은 테스트 통과를 실행 결과로 기록한다 |

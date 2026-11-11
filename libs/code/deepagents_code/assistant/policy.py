@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from deepagents.backends.utils import validate_path
 
 from deepagents_code.assistant.options import (
+    ASYNC_SUBAGENT_TOOLS,
     OTHER_MUTATING_TOOLS,
     PLAN_TOOLS,
     PROTECTED_DIRS,
@@ -187,6 +188,8 @@ def classify_call(
     """
     if tool_name in PLAN_TOOLS:
         return "allow", "plan_tool"
+    if tool_name in ASYNC_SUBAGENT_TOOLS:
+        return "deny", "async_subagent"
     path: Path | None = None
     if tool_name in WRITE_PATH_TOOLS:
         path = normalize_tool_path(args.get("file_path"))

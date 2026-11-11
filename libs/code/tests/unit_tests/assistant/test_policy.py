@@ -53,6 +53,14 @@ def test_rule1_plan_tool(root: Path) -> None:
     assert _classify(root, "submit_plan", {}) == ("allow", "plan_tool")
 
 
+@pytest.mark.parametrize("tool", ["start_async_task", "update_async_task"])
+def test_async_subagent_denied_even_after_approval(root: Path, tool: str) -> None:
+    """원격 서브에이전트는 쓰기 차단이 없어 승인 뒤에도 거부한다 (P3)."""
+    for phase in ("idle", "executing"):
+        decision = _classify(root, tool, {}, phase=phase, fresh_approval=True)
+        assert decision == ("deny", "async_subagent")
+
+
 @pytest.mark.parametrize("raw", [None, "", "../etc/passwd", "~/x", 3])
 def test_rule2_bad_path(root: Path, raw: object) -> None:
     assert _classify(root, "write_file", {"file_path": raw}) == ("deny", "bad_path")
