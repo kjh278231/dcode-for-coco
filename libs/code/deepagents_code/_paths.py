@@ -169,6 +169,9 @@ class ProjectPaths:
     skills_dir: Path
     agents_dir: Path
     hooks_file: Path
+    plans_dir: Path
+    memory_dir: Path
+    improvements_dir: Path
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,6 +239,9 @@ def project_paths(root: Path) -> ProjectPaths:
         skills_dir=config_dir / "skills",
         agents_dir=config_dir / "agents",
         hooks_file=config_dir / "hooks.json",
+        plans_dir=config_dir / "plans",
+        memory_dir=config_dir / "memory",
+        improvements_dir=config_dir / "improvements",
     )
 
 
