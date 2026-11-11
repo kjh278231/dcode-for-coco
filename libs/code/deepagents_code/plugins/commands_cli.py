@@ -1,0 +1,348 @@
+"""CLI helpers for plugin management."""
+
+from __future__ import annotations
+
+import argparse
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from deepagents_code.plugins.models import PluginUpdate, PluginUpdateResult
+
+from deepagents_code.plugins import (
+    add_marketplace_source,
+    install_plugin,
+    list_available_plugins,
+    reinstall_plugin,
+    remove_marketplace,
+    set_installed_plugin_enabled,
+    uninstall_plugin,
+    update_plugins,
+)
+from deepagents_code.plugins.marketplace import (
+    MarketplaceError,
+    redact_marketplace_source,
+    redact_urls_in_text,
+)
+from deepagents_code.plugins.store import (
+    install_path_exists,
+    load_installed_plugins,
+    load_marketplace_records,
+)
+
+
+def setup_plugin_parser(
+    subparsers: Any,  # noqa: ANN401  # argparse subparsers uses dynamic typing
+    *,
+    make_help_action: Callable[[Callable[[], None]], type[argparse.Action]],
+    add_output_args: Callable[[argparse.ArgumentParser], None] | None = None,
+) -> argparse.ArgumentParser:
+    """Set up the `plugin` CLI parser.
+
+    Args:
+        subparsers: Parent argparse subparsers object.
+        make_help_action: Factory for parser-specific help actions.
+        add_output_args: Optional callback that adds output-format flags.
+
+    Returns:
+        Plugin command parser.
+    """
+
+    def _help() -> None:
+        from deepagents_code.ui import show_plugins_help
+
+        show_plugins_help()
+
+    parent = argparse.ArgumentParser(add_help=False)
+    parent.add_argument("-h", "--help", action=make_help_action(_help))
+    parser = subparsers.add_parser(
+        "plugin",
+        aliases=["plugins"],
+        help="Manage plugins",
+        add_help=False,
+        parents=[parent],
+    )
+    if add_output_args is not None:
+        add_output_args(parser)
+    plugin_sub = parser.add_subparsers(dest="plugin_command")
+
+    list_parser = plugin_sub.add_parser("list", aliases=["ls"], help="List plugins")
+    if add_output_args is not None:
+        add_output_args(list_parser)
+
+    install_parser = plugin_sub.add_parser("install", help="Install a plugin")
+    install_parser.add_argument("plugin_id")
+    reinstall_parser = plugin_sub.add_parser(
+        "reinstall", help="Restore an installed plugin's files"
+    )
+    reinstall_parser.add_argument("plugin_id")
+    uninstall_parser = plugin_sub.add_parser("uninstall", help="Uninstall a plugin")
+    uninstall_parser.add_argument("plugin_id")
+
+    update_parser = plugin_sub.add_parser(
+        "update", help="Update installed plugins from their marketplaces"
+    )
+    update_parser.add_argument("plugin_ids", nargs="*", metavar="plugin_id")
+    update_parser.add_argument(
+        "--check", action="store_true", help="Only report available updates"
+    )
+    if add_output_args is not None:
+        add_output_args(update_parser)
+
+    enable_parser = plugin_sub.add_parser("enable", help="Enable a plugin")
+    enable_parser.add_argument("plugin_id")
+    disable_parser = plugin_sub.add_parser("disable", help="Disable a plugin")
+    disable_parser.add_argument("plugin_id")
+
+    marketplace_parser = plugin_sub.add_parser(
+        "marketplace", help="Manage plugin marketplaces"
+    )
+    marketplace_sub = marketplace_parser.add_subparsers(dest="marketplace_command")
+    marketplace_list = marketplace_sub.add_parser(
+        "list", aliases=["ls"], help="List marketplaces"
+    )
+    if add_output_args is not None:
+        add_output_args(marketplace_list)
+    marketplace_add = marketplace_sub.add_parser("add", help="Add a marketplace")
+    marketplace_add.add_argument("source")
+    marketplace_remove = marketplace_sub.add_parser(
+        "remove", help="Remove a marketplace and uninstall its plugins"
+    )
+    marketplace_remove.add_argument("name")
+    return parser
+
+
+def _needs_repair_ids() -> frozenset[str]:
+    """Return installed plugin ids whose registered install path is missing."""
+    return frozenset(
+        plugin_id
+        for plugin_id, entry in load_installed_plugins().items()
+        if not install_path_exists(entry.install_path)
+    )
+
+
+def _plugin_list_rows() -> list[dict[str, object]]:
+    needs_repair = _needs_repair_ids()
+    return [
+        {
+            "id": plugin_id,
+            "description": description,
+            "enabled": enabled,
+            "needs_repair": plugin_id in needs_repair,
+        }
+        for plugin_id, description, enabled in list_available_plugins()
+    ]
+
+
+def _update_row(update: PluginUpdate) -> dict[str, object]:
+    return {
+        "id": update.plugin_id,
+        "installed_version": update.installed_version,
+        "available_version": update.available_version,
+    }
+
+
+def _update_lines(result: PluginUpdateResult) -> list[str]:
+    lines = [
+        f"Updated {u.plugin_id} {u.installed_version} -> {u.available_version}."
+        for u in result.updated
+    ]
+    lines.extend(
+        f"Update available: {u.plugin_id} {u.installed_version} -> "
+        f"{u.available_version}"
+        for u in result.available
+    )
+    if result.updated:
+        lines.append("Run /reload to apply.")
+    elif not result.available and not result.errors:
+        lines.append("All plugins are up to date.")
+    lines.extend(result.errors)
+    return lines
+
+
+def _execute_update(args: argparse.Namespace, output_format: str) -> str | None:
+    try:
+        result = update_plugins(args.plugin_ids, check_only=args.check)
+    except (MarketplaceError, OSError, ValueError) as exc:
+        text = f"Failed to update plugins: {redact_urls_in_text(str(exc))}"
+        print(text)  # noqa: T201
+        raise SystemExit(1) from exc
+    if output_format == "json":
+        from deepagents_code.output import write_json
+
+        write_json(
+            "plugin update",
+            {
+                "updated": [_update_row(u) for u in result.updated],
+                "available": [_update_row(u) for u in result.available],
+                "errors": list(result.errors),
+            },
+        )
+        text = None
+    else:
+        text = "\n".join(_update_lines(result))
+        print(text)  # noqa: T201
+    if result.errors:
+        raise SystemExit(1)
+    return text
+
+
+def _list_status(row: dict[str, object]) -> str:
+    if row["needs_repair"]:
+        return "needs repair"
+    return "enabled" if row["enabled"] else "disabled"
+
+
+def _reinstall(plugin_id: str) -> str:
+    """Reinstall a plugin and print the outcome.
+
+    Returns:
+        The printed result text.
+
+    Raises:
+        SystemExit: With status 1 when the reinstall fails.
+    """
+    try:
+        instance = reinstall_plugin(plugin_id)
+    except (MarketplaceError, FileNotFoundError, OSError, ValueError) as exc:
+        text = f"Failed to reinstall {plugin_id}: {redact_urls_in_text(str(exc))}"
+        print(text)  # noqa: T201
+        raise SystemExit(1) from exc
+    text = f"Reinstalled plugin {instance.plugin_id}. Run /reload to activate."
+    print(text)  # noqa: T201
+    return text
+
+
+def execute_plugin_command(args: argparse.Namespace) -> str | None:
+    """Execute a plugin management command.
+
+    Args:
+        args: Parsed argparse namespace.
+
+    Returns:
+        Text output for slash-command callers, or `None` when output was written.
+
+    Raises:
+        SystemExit: With status 1 when a mutating command fails.
+    """
+    output_format = getattr(args, "output_format", "text")
+    command = getattr(args, "plugin_command", None)
+    if command is None:
+        from deepagents_code.ui import show_plugins_help
+
+        show_plugins_help()
+        return None
+    if command in {"list", "ls"}:
+        rows = _plugin_list_rows()
+        if output_format == "json":
+            from deepagents_code.output import write_json
+
+            write_json("plugin list", rows)
+            return None
+        if not rows:
+            text = "No plugin marketplaces configured."
+        else:
+            lines = []
+            for row in rows:
+                status = _list_status(row)
+                lines.append(f"{status} {row['id']} {row['description']}".rstrip())
+            text = "\n".join(lines)
+        print(text)  # noqa: T201
+        return text
+    if command == "install":
+        try:
+            instance = install_plugin(args.plugin_id)
+        except (MarketplaceError, FileNotFoundError, OSError, ValueError) as exc:
+            text = f"Failed to install {args.plugin_id}: {exc}"
+            print(text)  # noqa: T201
+            raise SystemExit(1) from exc
+        details = ""
+        if instance.version is not None:
+            details = f" (version: {instance.version})"
+        text = (
+            f"Installed plugin {instance.plugin_id}{details}. Run /reload to activate."
+        )
+        print(text)  # noqa: T201
+        return text
+    if command == "update":
+        return _execute_update(args, output_format)
+    if command == "reinstall":
+        return _reinstall(args.plugin_id)
+    if command == "uninstall":
+        uninstall_plugin(args.plugin_id)
+        text = f"Uninstalled plugin {args.plugin_id}."
+        print(text)  # noqa: T201
+        return text
+    if command in {"enable", "disable"}:
+        enabled = command == "enable"
+        try:
+            set_installed_plugin_enabled(args.plugin_id, enabled=enabled)
+        except (MarketplaceError, OSError, ValueError) as exc:
+            text = f"Failed to {command} {args.plugin_id}: {exc}"
+            print(text)  # noqa: T201
+            raise SystemExit(1) from exc
+        text = f"{command.title()}d plugin {args.plugin_id}."
+        print(text)  # noqa: T201
+        return text
+    if command == "marketplace":
+        marketplace_command = getattr(args, "marketplace_command", None)
+        if marketplace_command in {"list", "ls"}:
+            records = load_marketplace_records()
+            rows = [
+                {
+                    "name": record.name,
+                    "source_type": record.source_type,
+                    "source": redact_marketplace_source(record.source),
+                    "install_location": (
+                        record.install_location
+                        if record.source_type in {"directory", "file"}
+                        else "<managed cache>"
+                    ),
+                }
+                for record in records.values()
+            ]
+            if output_format == "json":
+                from deepagents_code.output import write_json
+
+                write_json("plugin marketplace list", rows)
+                return None
+            text = (
+                "No plugin marketplaces configured."
+                if not rows
+                else "\n".join(f"{row['name']} {row['source']}" for row in rows)
+            )
+            print(text)  # noqa: T201
+            return text
+        if marketplace_command == "add":
+            try:
+                marketplace = add_marketplace_source(args.source)
+            except (MarketplaceError, FileNotFoundError, OSError, ValueError) as exc:
+                source = redact_marketplace_source(args.source)
+                text = (
+                    f"Failed to add marketplace {source}: "
+                    f"{redact_urls_in_text(str(exc))}"
+                )
+                print(text)  # noqa: T201
+                raise SystemExit(1) from exc
+            text = (
+                f"Added marketplace {marketplace.name} "
+                f"({len(marketplace.plugins)} plugin(s))."
+            )
+            print(text)  # noqa: T201
+            return text
+        if marketplace_command == "remove":
+            removed = remove_marketplace(args.name)
+            text = (
+                f"Removed marketplace {args.name} and its installed plugins."
+                if removed
+                else f"Marketplace {args.name} is not configured."
+            )
+            print(text)  # noqa: T201
+            return text
+    text = (
+        "Usage: plugin "
+        "{list,install,reinstall,update,uninstall,enable,disable,marketplace}"
+    )
+    print(text)  # noqa: T201
+    return text
