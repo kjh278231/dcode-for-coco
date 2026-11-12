@@ -1493,6 +1493,8 @@ def format_run_detail(run: RunSummary, failures: Sequence[Failure]) -> str:
 
 `/trace`는 기존 처리기 `_handle_trace_command` (`DC/app.py:14508`)의 주소를 만드는 부분만 바꾼다.
 
+[M7] 실제로는 `_handle_command`의 `/trace` 분기에서 나눈다. Langfuse 키가 있으면(`tracing.is_enabled(os.environ)`) 새 처리기 `_handle_langfuse_trace_command`가 `runs.latest_trace`(이 대화의 thread id = Langfuse 세션 id로 `list_runs(limit=1, session_id=)`)의 주소를 연다. 없으면 업스트림 LangSmith 처리기를 그대로 부른다. 업스트림 `TestTraceCommand` 16건이 LangSmith 주소와 문구를 단언하고, 9.4는 그 테스트를 고치는 것을 허락하지 않는다. 바쁠 때 출력을 미루는 끝부분은 `_mount_trace_output`으로 빼서 둘이 같이 쓴다. 처리기 로직은 `runs.runs_command`(`/runs`, `/runs <앞부분>`은 최근 50건에서 찾는다)와 `runs.latest_trace`에 있다.
+
 [확인] `COMMANDS.md`는 자동 생성물이다. 명령을 더한 뒤 `make commands-catalog`를 돌린다. `make lint`가 이 파일의 최신 여부를 검사한다.
 
 ### 6.6 LangSmith
@@ -1563,12 +1565,14 @@ def find_observations(signals: Mapping[str, Mapping[str, float]],
 ```
 proposal.md        frontmatter: id, kind(rule|skill), name, status, created_at, observations
                    본문: 근거, 기대 효과
-payload/           kind=rule이면 <name>.md (5.1 형식)
+payload/           kind=rule이면 rule-<name>.md (5.1 형식. [M7] 기억 이름 규칙 `rule-…`에 맞춘다)
                    kind=skill이면 <name>/SKILL.md
 validation.json    평가 실행기가 쓴다. 없으면 검증 전이다
 ```
 
 `status`는 `proposed`, `validated`, `failed`, `applied`, `rejected` 가운데 하나다.
+
+[M7] `name`은 영소문자, 숫자, `-`로 64자 이하, `description`은 200자 이하의 한 줄이다. 모델이 정하는 값이라 `create`가 검사하고, 개선안 폴더와 스킬 폴더가 심볼릭 링크로 프로젝트 밖을 가리키면 쓰지 않는다. proposal.md frontmatter에 `description`도 둔다. 본문은 `## 근거`(근거와 기대 효과)다. `record_validation`은 `result["passed"]`가 참이면 `validated`다(M8 `judge`의 결과에 이 키를 둔다). 이미 `applied`인 개선안은 `reject`하지 않는다.
 
 ```python
 class ImprovementStore:
@@ -1628,9 +1632,11 @@ def propose_improvement(
 
 에이전트에게 보내는 지시문의 요지. 관찰 표, 가장 나빴던 작업의 trace id, "원인을 추정하고 프로젝트 규칙이나 스킬 하나로 고칠 수 있는 것만 `propose_improvement`로 제안하라. 근거가 약하면 제안하지 마라."
 
-[미확인] 슬래시 명령 처리기에서 `_handle_user_message` (`DC/app.py:19342`)로 지시문을 보내는 경로의 실제 동작. M7에서 확인한다.
+[실행 확인, M7] 슬래시 명령 처리기에서 `_handle_user_message`를 부르면 사람 메시지로 화면에 붙고 `_send_to_agent`가 실행 worker를 띄운다. `/skill:`이 이미 같은 길(`_send_to_agent`)을 쓴다. `/improve`는 `QUEUED`라 에이전트가 쉬고 있을 때만 돈다. 바쁠 때 넣은 명령도 큐에서 꺼낼 때 같은 길로 지시문을 한 번 보내고, 뒤의 메시지도 이어서 처리됐다(pilot 실험).
 
-**알림.** TUI가 시작될 때 백그라운드에서 `find_observations`를 한 번 돌리고, 관찰이 있으면 "개선할 관찰이 N건 있습니다. /improve로 시작하세요"를 띄운다. 실패는 조용히 넘긴다.
+[M7] 처리기 로직은 `improve.improve_command(args, project_root, environ) -> (화면 글, 지시문 | None)`에 있다. `/improve`는 최근 20건(`RECENT_RUNS`)의 `RunSummary.scores`로 관찰을 만든다. 예상 규모는 "모델 호출 약 1 + 2×관찰 수회"로 적는다(근거 없는 어림). `propose_improvement`는 관찰을 받지 않으므로 `observations=()`로 저장하고, 근거는 `rationale`에 적게 한다.
+
+**알림.** TUI가 시작될 때 백그라운드에서 `find_observations`를 한 번 돌리고, 관찰이 있으면 "개선할 관찰이 N건 있습니다. /improve로 시작하세요"를 띄운다. 실패는 조용히 넘긴다. [M7] 실제 실행(`run_textual_app`)이 켜 둔 경우에만, 첫 서버 연결(`ServerReady`) 뒤에 한 번 돈다. `on_mount`에 두면 앱을 띄우는 업스트림 테스트마다 Langfuse를 부른다(이 셸에는 키가 있다). 조회는 데몬 스레드에서 한다. `asyncio.to_thread`면 종료가 그 조회를 기다려 61초 걸렸다.
 
 ### 7.5 평가 실행기 (`evalsuite/`)
 
@@ -1941,6 +1947,8 @@ M3에서 미룬 것: `_cg_counters`와 `aafter_agent`는 소비자인 `tracing.p
 `improve.py`, `propose_improvement`, `/runs`, `/improve`, `/trace`.
 
 검사: `test_improve.py` 통과. `make commands-catalog` 뒤 `make lint` 통과. TUI에서 `/runs`와 `/improve list`가 뜨는지 눈으로 확인.
+
+[M7] 확인 결과로 바꾼 것: `/trace`는 Langfuse 키가 있을 때만 새 처리기로 나눈다(6.5). 규칙 payload 이름은 `rule-<name>.md`(7.3). 알림은 실제 실행의 첫 서버 연결 뒤(7.4).
 
 ### M8. 평가 실행기와 과제
 

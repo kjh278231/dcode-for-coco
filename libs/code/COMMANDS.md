@@ -8,7 +8,7 @@ Regenerate this file with `make commands-catalog` after changing command names,
 aliases, descriptions, visibility, or hidden-command metadata.
 
 
-## Public (46)
+## Public (48)
 
 | Command | Aliases | Description |
 | --- | --- | --- |
@@ -31,6 +31,7 @@ aliases, descriptions, visibility, or hidden-command metadata.
 | `/force-clear` |  | Recover a stuck session with a fresh thread |
 | `/goal` |  | Set and manage a persistent objective with acceptance criteria |
 | `/help` |  | Show help and available commands |
+| `/improve` |  | Find recurring problems in recent runs and manage fixes |
 | `/install` |  | Install an optional integration |
 | `/line-numbers` |  | Show or hide line numbers in file diffs |
 | `/manual` |  | Switch to Manual approval mode |
@@ -46,6 +47,7 @@ aliases, descriptions, visibility, or hidden-command metadata.
 | `/rename` |  | Name this thread or generate a suggested name |
 | `/restart` |  | Restart the agent server |
 | `/rubric` | `/criteria` | Set explicit acceptance criteria for rubric grading |
+| `/runs` |  | List recent runs from Langfuse, or show one run's failures |
 | `/scrollbar` |  | Show or hide the chat scrollbar |
 | `/skill-creator` |  | Create or refine agent skills |
 | `/theme` |  | Change color theme |
@@ -53,7 +55,7 @@ aliases, descriptions, visibility, or hidden-command metadata.
 | `/timestamps` |  | Show or hide message timestamps |
 | `/tokens` |  | Show token usage |
 | `/tools` |  | List the tools available to the agent |
-| `/trace` |  | Open this thread in LangSmith |
+| `/trace` |  | Open this thread's latest trace (Langfuse, else LangSmith) |
 | `/uninstall` |  | Remove an installed optional extra |
 | `/update` |  | Check for and install updates |
 | `/version` | `/about` | Show version information |

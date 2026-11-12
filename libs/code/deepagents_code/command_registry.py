@@ -259,8 +259,15 @@ COMMANDS: tuple[SlashCommand, ...] = (
     ),
     SlashCommand(
         name="/trace",
-        description="Open this thread in LangSmith",
+        description="Open this thread's latest trace (Langfuse, else LangSmith)",
         bypass_tier=BypassTier.SIDE_EFFECT_FREE,
+    ),
+    SlashCommand(
+        name="/runs",
+        description="List recent runs from Langfuse, or show one run's failures",
+        bypass_tier=BypassTier.QUEUED,
+        hidden_keywords="langfuse history traces failures",
+        argument_hint="[id prefix]",
     ),
     SlashCommand(
         name="/tokens",
@@ -331,6 +338,13 @@ COMMANDS: tuple[SlashCommand, ...] = (
         bypass_tier=BypassTier.QUEUED,
         hidden_keywords="extra extras add provider sandbox dependency",
         argument_hint="<extra> [--force]",
+    ),
+    SlashCommand(
+        name="/improve",
+        description="Find recurring problems in recent runs and manage fixes",
+        bypass_tier=BypassTier.QUEUED,
+        hidden_keywords="self-improvement observations proposal rule skill",
+        argument_hint="[list|show|apply|reject] [id]",
     ),
     SlashCommand(
         name="/uninstall",

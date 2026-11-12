@@ -4239,6 +4239,11 @@ class DeepAgentsApp(App):
         self._queued_goal_application: _GoalApplication | None = None
         """Accepted proposal deferred until the active graph run is quiescent."""
 
+        self._improvement_notice_pending = False
+        """Run the `/improve` observation hint on the next server ready.
+
+        Only `run_textual_app` arms it, so test apps never query Langfuse."""
+
         self._message_timestamps_visible = _load_message_timestamps_visible()
         """Whether message timestamp footers are shown in the chat surface.
 
@@ -6758,6 +6763,14 @@ class DeepAgentsApp(App):
         # startup command always resolves before the agent sees any user
         # input.
         self.call_after_refresh(self._spawn_session_start_sequence)
+
+        if self._improvement_notice_pending:
+            self._improvement_notice_pending = False
+            self.run_worker(
+                self._notify_improvement_observations,
+                exclusive=True,
+                group="startup-improve-notice",
+            )
 
         # Drain deferred actions (e.g. model/thread switch queued during connection)
         # if the agent is not actively running. Wrapped in a helper so that
@@ -14700,8 +14713,43 @@ class DeepAgentsApp(App):
                 "\n\nYou haven't sent a message in this thread yet, so the "
                 "trace will be empty until you send your first message.",
             )
-        msg = Content.assemble(*parts)
+        await self._mount_trace_output(command, Content.assemble(*parts))
 
+    async def _handle_langfuse_trace_command(self, command: str) -> None:
+        """Open this thread's latest Langfuse trace (SPEC 6.5).
+
+        Args:
+            command: The raw command text (displayed as user message).
+        """
+        from deepagents_code.assistant.runs import latest_trace
+
+        if not self._session_state:
+            await self._mount_message(UserMessage(command))
+            await self._mount_message(AppMessage("No active session."))
+            return
+        url, text = await asyncio.to_thread(
+            latest_trace, os.environ, self._session_state.thread_id
+        )
+        if url is not None:
+
+            def _open_browser() -> None:
+                try:
+                    webbrowser.open(url)
+                except Exception:
+                    logger.debug(
+                        "Could not open browser for URL: %s", url, exc_info=True
+                    )
+
+            asyncio.get_running_loop().run_in_executor(None, _open_browser)
+        await self._mount_trace_output(command, text)
+
+    async def _mount_trace_output(self, command: str, msg: str | Content) -> None:
+        """Mount the `/trace` echo and result, deferred while a turn runs.
+
+        Args:
+            command: The raw command text.
+            msg: The result to show.
+        """
         # Defer chat output while a turn is in progress — rendering the user
         # echo + link immediately would splice it into the middle of the
         # streaming assistant response
@@ -18177,7 +18225,23 @@ class DeepAgentsApp(App):
         ):
             await self._handle_threads_command(command)
         elif cmd == "/trace":
-            await self._handle_trace_command(command)
+            from deepagents_code.assistant import tracing
+
+            # Langfuse when its keys are set, else upstream LangSmith (SPEC 6.5)
+            if tracing.is_enabled(os.environ):
+                await self._handle_langfuse_trace_command(command)
+            else:
+                await self._handle_trace_command(command)
+        elif cmd == "/runs" or cmd.startswith("/runs "):
+            from deepagents_code.assistant.runs import runs_command
+
+            await self._mount_message(UserMessage(command))
+            text = await asyncio.to_thread(
+                runs_command, command.strip()[len("/runs") :], os.environ
+            )
+            await self._mount_message(AppMessage(text))
+        elif cmd == "/improve" or cmd.startswith("/improve "):
+            await self._handle_improve_command(command)
         elif cmd == "/update" or cmd.startswith("/update "):
             await self._handle_update_command(command)
         elif cmd == "/auto-update":
@@ -18986,6 +19050,60 @@ class DeepAgentsApp(App):
             return await asyncio.to_thread(save)
         except (MemoryFormatError, OSError) as exc:
             return f"규칙을 저장하지 못했다: {exc}"
+
+    async def _handle_improve_command(self, command: str) -> None:
+        """Run `/improve` and its subcommands (SPEC 7.4).
+
+        Bare `/improve` sends the observation table to the agent as a user
+        message when there is something to improve.
+
+        Args:
+            command: The raw command text.
+        """
+        from deepagents_code.assistant.improve import improve_command
+        from deepagents_code.hooks.trust import project_root_for
+
+        await self._mount_message(UserMessage(command))
+        text, prompt = await asyncio.to_thread(
+            improve_command,
+            command.strip()[len("/improve") :],
+            project_root_for(Path(self._cwd)),
+            os.environ,
+        )
+        await self._mount_message(AppMessage(text))
+        if prompt is not None:
+            await self._handle_user_message(prompt)
+
+    async def _notify_improvement_observations(self) -> None:
+        """Tell the user once per launch when `/improve` has observations."""
+        from deepagents_code.assistant.improve import pending_observation_count
+
+        loop = asyncio.get_running_loop()
+        done: asyncio.Future[int] = loop.create_future()
+
+        def _settle(count: int) -> None:
+            if not done.done():
+                done.set_result(count)
+
+        def _scan() -> None:
+            try:
+                count = pending_observation_count(os.environ)
+            except Exception:  # noqa: BLE001  # a startup hint must never break the UI
+                count = 0
+            with suppress(RuntimeError):  # loop already closed on exit
+                loop.call_soon_threadsafe(_settle, count)
+
+        # Daemon thread, not `to_thread`: quitting must not wait for Langfuse
+        # (the executor join held exit ~60s while its HTTP client retried).
+        threading.Thread(target=_scan, name="improve-notice", daemon=True).start()
+        count = await done
+        if count:
+            self.notify(
+                f"개선할 관찰이 {count}건 있습니다. /improve로 시작하세요",
+                severity="information",
+                timeout=10,
+                markup=False,
+            )
 
     async def _has_conversation_messages(self) -> bool:
         """Check whether the current thread has at least one human message.
@@ -33284,6 +33402,7 @@ async def run_textual_app(
         sub_title=sub_title,
         prespawned_server=prespawned_server,
     )
+    app._improvement_notice_pending = True
     stderr_guard: TerminalStderrGuard | None = None
     try:
         stderr_guard = TerminalStderrGuard.install()

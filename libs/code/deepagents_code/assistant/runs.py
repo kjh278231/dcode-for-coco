@@ -285,3 +285,73 @@ def format_run_detail(run: RunSummary, failures: Sequence[Failure]) -> str:
         lines.append("- 없음")
     lines.append(f"주소: {run.url or '알 수 없음'}")
     return "\n".join(lines)
+
+
+# ----- 슬래시 명령. 처리기는 아래 함수의 결과만 띄운다 -----
+
+FIND_LIMIT = 50
+"""`/runs <id 앞부분>`이 찾아보는 최근 작업 수."""
+
+
+def runs_command(
+    args: str, environ: Mapping[str, str], *, client: RunsClient | None = None
+) -> str:
+    """`/runs`와 `/runs <id 앞부분>`의 화면 문자열.
+
+    Args:
+        args: 명령 뒤의 인자.
+        environ: 환경변수 사전.
+        client: 조회 클라이언트. 없으면 환경의 키로 만든다.
+
+    Returns:
+        화면에 띄울 글.
+    """
+    prefix = args.strip()
+    try:
+        client = client or RunsClient(environ)
+        if not prefix:
+            return format_run_list(client.list_runs())
+        recent = client.list_runs(limit=FIND_LIMIT)
+        matches = [r for r in recent if r.trace_id.startswith(prefix)]
+        if len(matches) != 1:
+            head = (
+                f"{prefix}로 시작하는 작업이 여러 건입니다. 더 길게 적어 주세요."
+                if matches
+                else f"최근 {FIND_LIMIT}건에 {prefix}로 시작하는 작업이 없습니다"
+            )
+            return f"{head}\n{format_run_list(matches)}" if matches else head
+        return format_run_detail(matches[0], client.failures(matches[0].trace_id))
+    except TracingUnavailableError:
+        return NO_KEYS_TEXT
+    except Exception as exc:  # noqa: BLE001  # 네트워크 오류도 화면에 한 줄로
+        return f"Langfuse 조회에 실패했습니다: {type(exc).__name__}"
+
+
+def latest_trace(
+    environ: Mapping[str, str],
+    session_id: str,
+    *,
+    client: RunsClient | None = None,
+) -> tuple[str | None, str]:
+    """`/trace`. 이 대화(세션)의 가장 최근 trace 주소.
+
+    Args:
+        environ: 환경변수 사전.
+        session_id: 대화의 thread id. Langfuse 세션 id와 같다.
+        client: 조회 클라이언트. 없으면 환경의 키로 만든다.
+
+    Returns:
+        (주소 또는 None, 화면에 띄울 글).
+    """
+    try:
+        runs = (client or RunsClient(environ)).list_runs(limit=1, session_id=session_id)
+    except TracingUnavailableError:
+        return None, NO_KEYS_TEXT
+    except Exception as exc:  # noqa: BLE001
+        return None, f"Langfuse 조회에 실패했습니다: {type(exc).__name__}"
+    if not runs or not runs[0].url:
+        return None, (
+            "이 대화의 기록이 아직 Langfuse에 없습니다. "
+            "반영까지 수십 초 걸릴 수 있으니 잠시 뒤 다시 시도하세요."
+        )
+    return runs[0].url, f"Langfuse trace를 엽니다:\n{runs[0].url}"

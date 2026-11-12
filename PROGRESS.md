@@ -192,4 +192,62 @@
   - 문서: SPEC 6.2에 turn id가 없을 때 실행마다 trace가 갈리는 것, 재개가 같은 trace인지는 [미확인]으로 고쳤다.
   - 검사: `check.sh unit` 210 passed, `check.sh lint` 통과, `check.sh baseline` 84 failed, 10513 passed(10316 + 210 - 순서 의존 13), 26 skipped, 16 errors, 2 warnings. 새 실패 13건 모두 `TestStartupAutoUpdate`이고 따로 돌리면 통과(O6). 따로 돌려도 실패하는 새 실패 0건. 실제 요청 2회 더(재검증).
 
-## M7. 슬래시 명령과 개선안 — 다음
+## M7. 슬래시 명령과 개선안 — 완료 (2026-11-11)
+
+- 추가: `deepagents_code/assistant/improve.py`(`Threshold`, `THRESHOLDS`, `Observation`, `find_observations`, `ImprovementStore`, `improve_command`, `pending_observation_count`), `tests/unit_tests/assistant/test_improve.py`(23).
+- 수정(assistant): `tools.py`(`propose_improvement`, 멈추지 않고 저장만), `runs.py`(`runs_command`, `latest_trace`).
+- 수정(업스트림): `command_registry.py`(`/runs`, `/improve` 추가, QUEUED. `/trace` 설명), `app.py`(`/runs`·`/improve` 분기, `_handle_improve_command`, `/trace`를 Langfuse 키 유무로 나눔, `_handle_langfuse_trace_command`, `/trace` 출력 끝부분을 `_mount_trace_output`으로 뺌, 시작 알림 `_notify_improvement_observations`), `COMMANDS.md`(재생성).
+- 먼저 확인한 [미확인] (SPEC 7.4): 처리기에서 `_handle_user_message`로 지시문을 보내는 경로. pilot 실험(가짜 에이전트, `_run_agent_task` 대체)으로 처리기 안에서 부르면 지시문이 worker까지 한 번 가고 `_agent_running`이 풀린다. 바쁠 때 넣은 명령과 뒤의 메시지도 큐에서 차례로 처리됐다. 명세 가정과 같다. `/skill:`이 이미 같은 길을 쓴다. 이 확인은 `test_improve_handler_sends_instruction_to_agent`로 남겼다.
+- 검사:
+  - `check.sh unit` 229 passed (새 19: 관찰 계산, 규칙·스킬 개선안의 생성·검증 기록·반영·거절, 검증 전 반영 거부, 잘못된 kind·name·심볼릭 링크 거부, `/improve` 하위 명령과 지시문, `/runs`, `/trace` 문자열, 실제 그래프에서 `propose_improvement`가 저장만 하는지, TUI 처리기 둘). 변이 둘(처리기의 `_handle_user_message` 호출 제거, `apply`의 상태 검사 제거)에 테스트 3건이 실패하는 것을 확인했다.
+  - `generate_commands_catalog.py` 재생성 뒤 `check.sh lint` 통과.
+  - `check.sh baseline` 80 failed, 10536 passed(10316 + assistant 229 - 순서 의존 9), 26 skipped, 16 errors, 2 warnings. 새 실패 9건은 모두 `test_main.py::TestStartupAutoUpdate`이고 따로 돌리면 통과(O6). 따로 돌려도 실패하는 새 실패 0건. 업스트림 테스트는 고치지 않았다(명령 수 고정 테스트도 깨지지 않았다).
+  - 눈으로 확인 (D3에 따라 pane 캡처로 대신): 임시 저장소(`scratchpad/sample`, 견본 개선안 하나를 `ImprovementStore.create`로 넣음)에서 이 사본의 `.venv/bin/dcode -M opengateway:z-ai/glm-5.3-flash-ultrafast`. Langfuse 키는 셸에 없어서 실행할 때 설정 파일에서 읽어 환경으로만 넘겼다(값은 명령줄·파일에 남기지 않음). 모델 호출 없음, 비용 $0.00.
+
+캡처(줄임: 목록 10건 중 3건, 지표 0인 줄 생략, 주소의 프로젝트 id 가림):
+
+```
+▎/ runs
+ 2026-11-11T10:44:32  정상  llm_calls=2 tool_calls=1 tool_errors=1 gate_denies=1  052eee99
+ 2026-11-11T10:41:56  정상  지표 없음  e0fac13d
+ 2026-11-11T10:21:52  정상  llm_calls=2 tool_calls=1 tool_errors=1 gate_denies=1  7115ebe3
+ ... (10건)
+▎/ runs 052eee99
+ 작업 052eee992d6dfbc380237797e6adf04e
+ 시각: 2026-11-11T10:44:32.037000+00:00
+ 소요: 4.9초
+ 실패 구간:
+ - 2026-11-11T10:44:36 WARNING cg.gate.deny: no_approved_plan
+ 지표:
+ - cg.gate_denies: 1
+ - cg.llm_calls: 2
+ - cg.tool_calls: 1
+ - cg.tool_errors: 1
+ - (나머지 0)
+ 주소: https://jp.cloud.langfuse.com/project/<…>/traces/052eee992d6dfbc380237797e6adf04e
+▎/ improve list
+ 20261111-110413-use-uv  proposed  rule  테스트는 uv run pytest로 돌린다
+▎/ improve
+ 최근 작업 20건에서 임계값을 넘은 관찰이 없습니다
+▎/ trace
+ 이 대화의 기록이 아직 Langfuse에 없습니다. 반영까지 수십 초 걸릴 수 있으니 잠시 뒤 다시 시도하세요.
+```
+
+  - 키가 없는 pane에서 처음 띄웠을 때 `/runs`는 "Langfuse 키가 없어 기록이 없습니다"를 띄웠다.
+- 명세와 다르게 한 점 (SPEC 6.5, 7.3, 7.4, 10장 M7에 반영함):
+  - `/trace`: `_handle_trace_command`의 주소 부분을 바꾸지 않고 `_handle_command`에서 나눈다. Langfuse 키가 있으면 새 처리기, 없으면 업스트림 LangSmith 처리기 그대로. 업스트림 `TestTraceCommand` 16건이 LangSmith 주소와 문구를 단언하는데 9.4가 그 수정을 허락하지 않는다. 이 셸에는 Langfuse 키가 있어 `_handle_trace_command` 안에서 나누면 그 테스트들이 Langfuse 쪽으로 간다.
+  - 시작 알림은 `on_mount`가 아니라 `run_textual_app`이 켠 앱의 첫 `ServerReady` 뒤에 한 번. 처음에 `ServerReady`마다 돌게 했더니 업스트림 `test_app.py` 2건이 실제 Langfuse 조회의 재시도 대기로 teardown 시간 초과가 났다.
+  - 규칙 payload 파일은 `payload/rule-<name>.md`(기억 이름 규칙 `rule-…`). proposal.md frontmatter에 `description` 추가, 본문은 `## 근거`. `record_validation`은 `result["passed"]`로 상태를 정한다(M8 `judge` 결과에 이 키를 둔다). 반영된 개선안은 거절하지 않는다.
+  - `propose_improvement`는 관찰을 받지 않아 `observations=()`로 저장한다. 근거는 `rationale`에.
+  - `/improve`는 최근 20건의 `RunSummary.scores`로 관찰을 만든다(`signals()`를 다시 부르지 않는다). 예상 규모는 "모델 호출 약 1 + 2×관찰 수회"(어림). `/runs <앞부분>`은 최근 50건에서 찾는다.
+  - `name`(영소문자·숫자·`-`, 64자)과 `description`(200자 한 줄) 검사, 개선안·스킬 폴더의 심볼릭 링크 탈출 거부.
+- 리뷰 뒤 수정:
+  - 시작 알림 스캔이 종료를 막았다. 키가 있을 때 연결 4초 뒤 Ctrl+D부터 셸 복귀까지 61초(키 없으면 0.24초). `asyncio.to_thread`의 실행기를 종료가 기다리는 동안 Langfuse HTTP 클라이언트가 재시도했다. 데몬 스레드로 바꾼 뒤 키가 있어도 0.3초.
+  - `ImprovementStore.load`가 손으로 고친 proposal.md의 `kind`, `name`을 다시 검사한다(`name: ../../x`로 반영하면 스킬 복사가 밖으로 나갈 수 있었다). `/improve list`는 읽을 수 없는 개선안을 한 줄로 보이고 넘어간다.
+  - 테스트 추가: 손으로 고친 proposal 거부, 시작 알림(한 번만, 0건과 실패는 조용히). 변이 둘(한 번만 플래그 제거, 실패 시 0 대신 7)에 알림 테스트 3건이 실패.
+  - 다시 돌린 검사: `check.sh unit` 233 passed, `check.sh lint` 통과, `check.sh baseline` 77 failed, 10543 passed(10316 + 233 - 순서 의존 6), 26 skipped, 16 errors, 2 warnings. 새 실패 6건 모두 `TestStartupAutoUpdate`이고 따로 돌리면 통과(O6). 따로 돌려도 실패하는 새 실패 0건.
+  - 사용자 프로필 `.env`의 Langfuse 키: 임시 `DEEPAGENTS_HOME`에 가짜 키를 두고 `config._ensure_bootstrap()` 뒤 `os.environ`에 들어가 `tracing.is_enabled`가 참인 것을 Python에서 확인했다. TUI로는 확인하지 않았다.
+- 확인 못 한 것: 실제 모델로 `/improve` → `propose_improvement`(임계값을 넘은 관찰이 없어서 지시문이 나가지 않았다. 가짜 모델 그래프 테스트와 pilot 테스트로만 확인). 시작 알림이 실제로 뜨는 화면(관찰 0건이라 안 뜸). `/trace`가 브라우저를 여는 실제 동작(새 대화라 trace 없음). `/improve apply`의 실제 TUI 실행. `ty`.
+- 참고: 전역 `dcode`(`~/.local/bin/dcode`)는 지금 `~/workspace/deepagents/libs/code`를 가리킨다. 이 사본은 `libs/code/.venv/bin/dcode`로 띄웠다. Langfuse 키는 셸이 아니라 `~/.claude/settings.json`의 `env`에서 온다(이 에이전트 프로세스에만 있다). 사용자의 보통 터미널에는 없다. 단위 테스트도 이 환경에서는 실제 Langfuse에 닿았다(`--disable-socket`인데 관측 조회가 성공한 뒤 점수 조회에서 재시도 중이었다). M8에서 주의.
+
+## M8. 평가 실행기와 과제 — 다음

@@ -1,10 +1,10 @@
-"""계획 도구: submit_plan, request_plan_approval, complete_plan, propose_rule."""
+"""계획 도구: 제출, 승인 요청, 완료, propose_rule, propose_improvement."""
 
 from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from langchain.tools import InjectedToolCallId, ToolRuntime
 from langchain_core.messages import ToolMessage
@@ -13,6 +13,7 @@ from langgraph.types import Command, interrupt
 
 from deepagents_code.assistant import tracing
 from deepagents_code.assistant.decider import question_j1, question_j2, question_j3
+from deepagents_code.assistant.improve import ImprovementStore
 from deepagents_code.assistant.memory import (
     MemoryFormatError,
     MemoryStore,
@@ -114,17 +115,17 @@ def build_plan_tools(
 ) -> list[BaseTool]:
     """계획 도구를 만든다. PlanGateMiddleware.tools가 이 목록을 쓴다.
 
-    `propose_improvement`(M7)는 아직 없다.
-
     Args:
         options: 게이트 옵션.
         backend: `complete_plan`이 테스트 명령을 실행할 백엔드.
 
     Returns:
-        submit_plan, request_plan_approval, complete_plan, propose_rule.
+        submit_plan, request_plan_approval, complete_plan, propose_rule,
+        propose_improvement.
     """
     store = PlanStore(options.project_root)
     memory = MemoryStore(options.project_root)
+    improvements = ImprovementStore(options.project_root)
 
     async def submit_plan(  # 계획의 절마다 인자 하나
         requirements: str,
@@ -596,6 +597,86 @@ def build_plan_tools(
             _rule_result, description, body, response, tool_call_id
         )
 
+    def propose_improvement(
+        kind: Literal["rule", "skill"],
+        name: str,
+        description: str,
+        body: str,
+        rationale: str,
+        tool_call_id: Annotated[str, InjectedToolCallId],
+        runtime: ToolRuntime[Any, Any],
+    ) -> Command[Any]:
+        """개선안 하나를 저장한다. 반영하지 않는다. 사람이 검증과 반영을 한다.
+
+        Args:
+            kind: `rule`(프로젝트 규칙) 또는 `skill`(스킬).
+            name: 영소문자, 숫자, `-`로 된 이름.
+            description: 한 줄 설명 (200자 이하).
+            body: 규칙 본문 또는 SKILL.md 본문.
+            rationale: 근거가 된 관찰과 기대 효과.
+            tool_call_id: 주입되는 호출 id.
+            runtime: 주입되는 도구 실행 환경.
+
+        Returns:
+            결과 메시지.
+        """
+        del runtime
+        tool = "propose_improvement"
+        try:
+            improvement_id = improvements.create(
+                kind=kind,
+                name=name,
+                description=description,
+                body=body,
+                rationale=rationale,
+                observations=(),
+                now=datetime.now(UTC),
+            )
+        except (ValueError, OSError) as exc:
+            text = f"개선안을 저장하지 못했다: {exc}"
+            return _reply(text, tool_call_id, tool, error=True)
+        return _reply(
+            f"개선안 {improvement_id}을 저장했다. 반영하지 않았다. "
+            "검증: python -m deepagents_code.assistant.evalsuite run "
+            f"--improvement {improvement_id}. 반영: /improve apply {improvement_id}",
+            tool_call_id,
+            tool,
+        )
+
+    async def apropose_improvement(
+        kind: Literal["rule", "skill"],
+        name: str,
+        description: str,
+        body: str,
+        rationale: str,
+        tool_call_id: Annotated[str, InjectedToolCallId],
+        runtime: ToolRuntime[Any, Any],
+    ) -> Command[Any]:
+        """개선안 하나를 저장한다. 반영하지 않는다. 사람이 검증과 반영을 한다.
+
+        Args:
+            kind: `rule`(프로젝트 규칙) 또는 `skill`(스킬).
+            name: 영소문자, 숫자, `-`로 된 이름.
+            description: 한 줄 설명 (200자 이하).
+            body: 규칙 본문 또는 SKILL.md 본문.
+            rationale: 근거가 된 관찰과 기대 효과.
+            tool_call_id: 주입되는 호출 id.
+            runtime: 주입되는 도구 실행 환경.
+
+        Returns:
+            결과 메시지.
+        """
+        return await asyncio.to_thread(
+            propose_improvement,
+            kind,
+            name,
+            description,
+            body,
+            rationale,
+            tool_call_id,
+            runtime,
+        )
+
     return [
         StructuredTool.from_function(coroutine=submit_plan, name="submit_plan"),
         StructuredTool.from_function(
@@ -606,5 +687,10 @@ def build_plan_tools(
         StructuredTool.from_function(coroutine=complete_plan, name="complete_plan"),
         StructuredTool.from_function(
             func=propose_rule, coroutine=apropose_rule, name="propose_rule"
+        ),
+        StructuredTool.from_function(
+            func=propose_improvement,
+            coroutine=apropose_improvement,
+            name="propose_improvement",
         ),
     ]
