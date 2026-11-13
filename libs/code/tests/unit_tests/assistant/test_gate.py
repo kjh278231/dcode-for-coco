@@ -227,6 +227,31 @@ async def test_f1_observed_read_only_shell_runs_and_program_is_guided(
     assert not (tmp_path / "ran.txt").exists()
 
 
+async def test_f5_observed_read_only_shell_runs_in_real_shell(tmp_path: Path) -> None:
+    """[F5] 넓힌 판정이 실제 셸에서도 읽기만 한다. find의 식은 계속 거부된다."""
+    (tmp_path / "pyvenv.cfg").write_text("x\n")
+    commands = {
+        "e1": f"ls {tmp_path}/nope.py 2>/dev/null; ls {tmp_path}/pyvenv.cfg",
+        "e2": f"ls {tmp_path}/pyvenv.cfg >/dev/null && echo ok-null",
+        "e3": f"git -C {tmp_path} status --short 2>&1 | head -3",
+        "e4": f'find {tmp_path} -maxdepth 3 -name "pyvenv.cfg"',
+        "e5": f"find {tmp_path} -name pyvenv.cfg '-delete'",
+        # sh(dash)에서는 `echo a &`와 `>/dev/null touch pw`로 나뉜다
+        "e6": f"echo a &>/dev/null touch {tmp_path}/pw",
+    }
+    script = [tool_call("execute", {"command": c}, i) for i, c in commands.items()]
+    h = Harness(tmp_path, [*script, done()])
+    result = await h.say("가상환경 위치 확인")
+    assert "pyvenv.cfg" in str(tool_result(result, "e1").content)
+    assert "ok-null" in str(tool_result(result, "e2").content)
+    assert "승인된 계획이 없다" not in str(tool_result(result, "e3").content)
+    assert "pyvenv.cfg" in str(tool_result(result, "e4").content)
+    assert tool_result(result, "e5").status == "error"
+    assert (tmp_path / "pyvenv.cfg").exists()
+    assert tool_result(result, "e6").status == "error"
+    assert not (tmp_path / "pw").exists()
+
+
 async def test_g4_submit_without_exploring_is_denied(tmp_path: Path) -> None:
     h = Harness(tmp_path, [submit(), done()])
     result = await h.say("app.py 버그 고쳐줘")

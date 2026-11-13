@@ -143,7 +143,6 @@ def test_f1_read_only_chains_allowed(root: Path, command: str) -> None:
         "ls 2> out",
         "ls >&2",
         "ls &>/dev/null",
-        "ls 1>/dev/null",
         "cat < a",
         "ls & rm x",
         # 치환과 변수
@@ -190,6 +189,146 @@ def test_f1_read_only_chains_allowed(root: Path, command: str) -> None:
     ],
 )
 def test_f1_write_capable_lookalikes_denied(root: Path, command: str) -> None:
+    command = command.format(r=root, rel=str(root).lstrip("/"))
+    assert not is_read_only_shell(command, root)
+    assert _classify(root, "execute", {"command": command}) == (
+        "deny",
+        "no_approved_plan",
+    )
+
+
+# [F5] dcode-a(glm-5.3-flash) 실사용에서 아직 거부된 명령과 닮은꼴. {r}는 루트.
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        # 관찰된 명령 (/root는 프로젝트 밖)
+        "ls /root/a.py 2>/dev/null; ls /root/b.py",
+        "ls /root/README.md >/dev/null && echo ok",
+        ("git -C {r} status --short --branch && git -C {r} log --oneline -3"),
+        'find /root -maxdepth 3 -name "pyvenv.cfg"',
+        # 구분자 경계와 /dev/null 리다이렉트
+        "ls 2>/dev/null|head -1",
+        "ls 2>&1&& echo ok",
+        "ls 2>/dev/null||echo none",
+        "ls 1>/dev/null",
+        "ls >/dev/null 2>&1 && echo ok",
+        "cd {r} && git status --short 2>/dev/null;git log -1",
+        "git -C {r}/ diff --stat",
+        # 따옴표 안의 glob은 펼쳐지지 않는다
+        "find . -name '*.py' -type f | head -5",
+        'find {r} -maxdepth 2 -name "*.toml" -print',
+    ],
+)
+def test_f5_read_only_allowed(root: Path, command: str) -> None:
+    command = command.format(r=root)
+    assert _classify(root, "execute", {"command": command}) == (
+        "allow",
+        "read_only_shell",
+    )
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        # 구분자 경계: 단독 &(백그라운드)는 계속 거부
+        "ls 2>/dev/null& rm x",
+        "ls 2>/dev/null &",
+        "ls >/dev/null&",
+        "ls 2>&1& touch x",
+        "ls &>/dev/null&",
+        # sh(dash)에서 `&>`는 백그라운드 + 리다이렉트다
+        "echo a &>/dev/null touch pw",
+        "ls &>/dev/null; echo done",
+        "ls 2>/dev/null|& tee f",
+        # /dev/null이 아닌 리다이렉트
+        "ls >/dev/nullx",
+        "ls >/dev/null/x",
+        "ls >/dev/null/../tmp/x",
+        "ls >|/dev/null",
+        "ls >>/dev/null",
+        "ls &>>/dev/null",
+        "ls > /dev/null",
+        "ls >out",
+        "ls 1>out",
+        "ls &>out",
+        "ls 3>/dev/null",
+        "ls 1>&2",
+        "ls 2>&3",
+        "ls >&/dev/null",
+        "ls x>/dev/null",
+        "ls >/dev/null; echo a > b",
+        # git -C: 루트 자체의 절대 경로 하나만
+        "git -C /tmp status",
+        "git -C {r}/.. status",
+        "git -C {r}/sub status",
+        "git -C . status",
+        "git -C {rel} status",
+        "git -C ~ status",
+        "git -C {r} -C /tmp status",
+        "git -C {r} -C {r} status",
+        "git -C{r} status",
+        "git -C {r}* status",
+        "git -C",
+        "git -C {r}",
+        "git -C {r} commit -m x",
+        "git -C {r} -c core.pager=x log",
+        "git -C {r} --git-dir=/tmp/x status",
+        "git -C {r} --work-tree=/tmp status",
+        "git -C {r} log --output=f",
+        "git -C {r} diff --ext-diff",
+        "git -C {r} diff *",
+        "cd /tmp && git -C {r} status",
+        # [F5 리뷰] -C를 떼고 다시 짤 때 줄바꿈이 공백이 되면 뒤 명령이 돈다
+        "git -C {r} status\ntouch pw",
+        "git -C {r} status\rtouch pw",
+        "git -C {r} status;touch pw",
+        "git -C {r} status 'a;b'",
+        # [F5] 중괄호 펼침과 $@, $1이 git 옵션을 만든다 (전부터 있던 우회)
+        "git log {{--output=f,HEAD}}",
+        "git log $@--output=f",
+        "git -C {r} log $1--output=f",
+        # find: 실행하거나 쓰는 식
+        "find . -exec rm {{}} +",
+        "find . -execdir rm {{}} +",
+        "find . -ok rm {{}} +",
+        "find . -okdir rm {{}} +",
+        "find . -ok rm",
+        "find . -okdir rm",
+        "find . -execdir rm",
+        "find . -delete",
+        "find . -fprint f",
+        "find . -fprint0 f",
+        "find . -fprintf f %p",
+        "find . -fls f",
+        "find . -rm",
+        # 따옴표와 역슬래시로 숨긴 식
+        "find . '-delete'",
+        'find . "-delete"',
+        "find . -de'le'te",
+        'find . "-exec" rm',
+        "find . -ex\\ec rm",
+        "find . \\-delete",
+        # 펼쳐서 식이 되는 것
+        "find . -name x *",
+        "find . -name x -del?te",
+        "find . -name x [-]delete",
+        "find . -{{delete,print}}",
+        "find . -del$@ete",
+        "find . -del$1ete",
+        "find . -name 'x",
+        # 다른 검사는 그대로
+        "find . | xargs rm",
+        "find . -name x > out",
+        "find . -name $(rm x)",
+        "find . -name `rm x`",
+        "find . -name x & rm y",
+        "cd {r} && find . -delete",
+        "ls && find . -delete",
+    ],
+)
+def test_f5_lookalikes_denied(root: Path, command: str) -> None:
     command = command.format(r=root, rel=str(root).lstrip("/"))
     assert not is_read_only_shell(command, root)
     assert _classify(root, "execute", {"command": command}) == (

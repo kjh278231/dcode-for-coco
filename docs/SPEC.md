@@ -472,16 +472,29 @@ def is_read_only_shell(command: object, project_root: Path) -> bool:
     #        command, list(RECOMMENDED_SAFE_SHELL_COMMANDS))가 True면 True
     # 3) deepagents_code.auto_mode._fixed_repo_command_allowed(command, project_root)가 True면 True
     #    [F1 리뷰] 단 glob 문자(`*?[`)가 없을 때만. `git diff *`는 `--output=x`라는 파일 이름을 옵션으로 펼친다
+    #    [F5] `{`, `$`도 없을 때만(`git log {--output=f,HEAD}`, `git log $@--output=f`가 옵션을 만든다).
+    #    맨 앞이 `git -C <경로>`이고 경로가 절대 경로이며 glob 문자 없이 프로젝트 루트 자체로
+    #    풀리면 `-C <경로>`를 떼고 본다. `-C`가 둘이면 두 번째에서 거부된다
+    #    [F5 리뷰] 떼기 전 원문에 줄바꿈·`;`·`|`·`&`·`<>`·백틱이 있으면 거부한다. shlex로 다시 짜면
+    #    줄바꿈이 공백이 되어 `git -C <루트> status\ntouch x`가 지나갔다
     # 4) [F1] 조합 명령을 조각마다 본다 (_read_only_chain). 모두 맞으면 True
     #    a) 스페이스나 문자열 끝으로 떨어진 `2>&1`, `2>/dev/null` 토큰만 지운다
     #       (유니코드 공백은 bash가 나누지 않으므로 경계로 보지 않는다)
+    #       [F5] `>/dev/null`, `1>/dev/null`도 지운다. 토큰 뒤는 스페이스, 끝,
+    #       `;`, `|`, `&&`이어야 한다(단독 `&`가 붙으면 지우지 않아 b에서 거부).
+    #       `&>/dev/null`은 지우지 않는다. 실행 셸 sh(dash)에서는 `cmd &` + `>/dev/null 다음명령`이다
     #    b) 남은 문자열이 config.contains_dangerous_patterns면 False (다른 리다이렉트, &, $, 치환)
     #    c) 업스트림과 같은 &&, ||, |, ; 로 나눈다. 빈 조각이 있으면 False
     #    d) 첫 조각이 `cd <절대 경로>`이면 그 조각은 건너뛴다
     #       (상대 경로, `~`, `-`, glob 문자는 받지 않는다. 맨 앞이 아닌 cd는 받지 않는다)
     #    e) 남은 조각마다 is_shell_command_allowed(조각, RECOMMENDED_SAFE_SHELL_COMMANDS + ["echo"])
+    #       또는 [F5] find 검사(_find_read_only)
     #       또는 3)의 git 검사(glob 문자 없음 + _fixed_repo_command_allowed).
     #       뒤의 것(git)은 cd가 없거나 cd 대상이 프로젝트 루트 자체일 때만 쓴다
+    #    f) [F5] find 검사: 첫 토큰이 `find`이고, 역슬래시, `$`, `{`가 없고, 따옴표 구간을 뺀
+    #       나머지에 `*?[`와 짝 없는 따옴표가 없고, shlex로 따옴표를 푼 어떤 토큰도
+    #       `-exec`, `-ok`, `-delete`, `-fprint`, `-fls`, `-rm`으로 시작하지 않는다
+    #       (앞부분 일치라 -execdir, -okdir, -fprint0, -fprintf도 잡는다. -rm은 bfs의 별칭)
     # 5) 그 밖은 False
 
 
@@ -535,7 +548,9 @@ def classify_call(
 
 [F1] 4)를 더한 이유. dcode-a 실사용에서 `echo probe`, `ls <경로> && echo "---" && head -60 <파일>`, `cd <루트> && git log --oneline -3 2>&1 | head -5`가 `no_approved_plan`으로 거부됐고 모델이 셸 명령만 바꿔 가며 다시 시도했다. 판정은 업스트림 두 검사를 조각마다 다시 쓴 것이고 새로 허용한 것은 `echo`, 두 리다이렉트, 맨 앞의 `cd <절대 경로>`뿐이다. `cd` 뒤의 git을 루트로 갈 때만 받는 이유는 업스트림이 git을 신뢰한 저장소 밖에서 돌리지 않기 때문이다(`-C`가 허용 옵션에 없다). 다른 저장소(하위 폴더의 중첩 저장소 포함)의 설정은 `git status`, `git diff`에서 프로그램을 돌릴 수 있다. `cd` 뒤의 `ls`, `cat` 같은 명령은 어디서든 절대 경로로도 읽을 수 있어 막지 않는다. 같은 함수를 `SubagentWriteBlockMiddleware`도 쓰므로 서브에이전트의 `execute`도 같이 넓어진다. 판단 기록 O17.
 
-검사: 규칙표 아홉 줄 각각에 사례 하나 이상. `cat a > b`는 4번에 걸리지 않아야 한다. [F1] 위 세 명령은 4번에 걸리고, 쓰기가 가능한 닮은꼴(`2>&1>out`, `2>/dev/nullx`, `2> out`, `>&2`, `| tee`, `| xargs rm`, `sed -i`, `cd /tmp && git status`, `cd <루트>/src && git status`, 상대 경로 `cd`, 유니코드 공백이 붙은 `2>/dev/null`, 맨 앞이 아닌 `cd`, 쓰는 git 하위 명령, `python3`, 허용 이름의 함수 정의 `cat () ( touch x ) && cat`, glob이 붙은 git `git diff *`)은 걸리지 않는다 (`test_policy.py` `test_f1_*`). 상대 경로 `docs/x.md`가 `/docs/x.md`로 정규화되어 루트 밖으로 판정되는지. 심볼릭 링크로 보호 폴더를 가리키는 경로.
+[F5] 3), 4a), 4f)를 더한 이유. 릴리스본 dcode-a(glm-5.3-flash)가 `ls /root/a.py 2>/dev/null; ls /root/b.py`(`;` 앞 토큰을 못 지움, 버그), `ls /root/README.md >/dev/null && echo ok`, `git -C <루트> status --short --branch && git -C <루트> log --oneline -3`, `find /root -maxdepth 3 -name "pyvenv.cfg"`를 `no_approved_plan`으로 거부당했다. 안전 근거: /dev/null로 가는 출력은 버려지고, 단독 `&`와 다른 리다이렉트는 업스트림 검사에 남는다. `execute`는 `subprocess.run(shell=True)`, 즉 `/bin/sh`(여기서는 dash)로 돈다. dash에서 `&>`는 `&`(백그라운드)와 `>`로 나뉘어 `echo a &>/dev/null touch pw`가 `touch`를 실행하므로 `&>/dev/null`은 받지 않는다. `git -C <루트>`는 루트로 간 `cd` 뒤의 git과 같은 저장소 설정을 읽는다. find는 실행하거나 쓰는 식만 위험하고, 셸 펼침(glob, 중괄호, `$@`)이 식을 만들 수 있어 그 문자를 막는다. 같은 펼침이 git 허용 옵션 검사도 우회해서(`git log {--output=f,HEAD}`, 전부터 있던 우회) `{`, `$`를 git에도 막았다. 따옴표 안의 glob(`-name "*.py"`)은 펼쳐지지 않아 받는다. 판단 기록 O19, O20, O21.
+
+검사: 규칙표 아홉 줄 각각에 사례 하나 이상. `cat a > b`는 4번에 걸리지 않아야 한다. [F1] 위 세 명령은 4번에 걸리고, 쓰기가 가능한 닮은꼴(`2>&1>out`, `2>/dev/nullx`, `2> out`, `>&2`, `| tee`, `| xargs rm`, `sed -i`, `cd /tmp && git status`, `cd <루트>/src && git status`, 상대 경로 `cd`, 유니코드 공백이 붙은 `2>/dev/null`, 맨 앞이 아닌 `cd`, 쓰는 git 하위 명령, `python3`, 허용 이름의 함수 정의 `cat () ( touch x ) && cat`, glob이 붙은 git `git diff *`)은 걸리지 않는다 (`test_policy.py` `test_f1_*`). [F5] 위 네 명령은 4번에 걸리고, 닮은꼴(구분자 앞 `2>/dev/null&`, `>/dev/nullx`, `>/dev/null/x`, `>|`, `>>`, `3>/dev/null`, `1>&2`, 루트가 아닌·상대·하위 경로나 두 번 쓴 `git -C`, `-C` 뒤의 `-c`·`--git-dir`·`--output`, 중괄호와 `$@`로 만든 git 옵션, find의 위험한 식 전부와 따옴표·역슬래시로 숨긴 형태, 따옴표 밖 glob, `find … | xargs rm`)은 걸리지 않는다 (`test_policy.py` `test_f5_*`, 실제 셸 `test_gate.py` `test_f5_*`). 상대 경로 `docs/x.md`가 `/docs/x.md`로 정규화되어 루트 밖으로 판정되는지. 심볼릭 링크로 보호 폴더를 가리키는 경로.
 
 ### 3.5 `reviewer.py`
 
@@ -1055,7 +1070,7 @@ def gate_prompt(phase: str, plan_summary: str | None) -> str:
 
 `GATE_BASE`의 요지.
 
-1. 요청을 받으면 먼저 `task(subagent_type="explorer")`로 탐색한다.
+1. 요청을 받으면 먼저 `task(subagent_type="explorer")`로 탐색한다. [F5] 승인 전에는 셸 명령 대신 `read_file`, `glob`, `grep`이나 탐색 서브에이전트로 읽는다.
 2. 코드를 바꿔야 하면 `submit_plan`으로 계획을 낸다. 쓰기 도구는 승인 전까지 쓸 수 없다.
 3. 리뷰 의견이 오면 반영해 다시 제출한다.
 4. `request_plan_approval`로 사람의 승인을 받는다.
@@ -2070,6 +2085,6 @@ README에 함께 적는 것. 필요한 키와 없을 때의 동작, 게이트 �
 - [M6] 게이트는 도구 결과를 카운터와 함께 `Command`로 감싼다. 게이트 바깥 미들웨어가 `ToolMessage`를 기대하면 동작이 바뀐다. `ask_user`는 `AskUserMiddleware`의 인자 거절 경고가 `ToolMessage`를 봐야 해서 감싸지 않는다(그래서 `cg.tool_calls`에 들어가지 않는다). `MemoryGuardMiddleware`가 관리 블록을 되돌리며 결과를 오류 `ToolMessage`로 바꾸면 그 호출의 카운터 증가분이 사라진다.
 - [M6] 추적이 켜진 실행에서는 `cg.memory.inject`에 상한으로 뺀 기억을 적으려고 요청 시작 때 주입 글을 한 번 더 만든다. 추적이 꺼져 있으면 만들지 않는다.
 - [M6] 서브에이전트 안의 도구 호출은 카운터에 들어가지 않는다. 승인 화면에서 멈춘 실행에는 `after_agent`가 돌지 않아 점수가 없다.
-- [F1] 승인 전 `execute`의 읽기 전용 판정은 명령 이름 허용 목록이다. `cat`, `head`, `ls`는 프로젝트 밖 파일도 읽는다(전부터 그랬다). `cd`는 맨 앞의 절대 경로 하나만(그 뒤의 git은 루트로 갈 때만), `2>&1`과 `2>/dev/null` 밖의 리다이렉트는 받지 않는다. `(cd x && ls)`처럼 괄호로 묶은 명령, `printf`, `sed -n`, `find`, `rg`는 여전히 거부된다.
+- [F1] 승인 전 `execute`의 읽기 전용 판정은 명령 이름 허용 목록이다. `cat`, `head`, `ls`는 프로젝트 밖 파일도 읽는다(전부터 그랬다). `cd`는 맨 앞의 절대 경로 하나만(그 뒤의 git은 루트로 갈 때만), `2>&1`과 `2>/dev/null` 밖의 리다이렉트는 받지 않는다. `(cd x && ls)`처럼 괄호로 묶은 명령, `printf`, `sed -n`, `rg`는 여전히 거부된다. [F5] `>/dev/null`, `1>/dev/null`(같이 쓰는 `2>&1` 포함. `&>/dev/null`은 sh에서 백그라운드라 거부), 루트로 가는 `git -C <절대 경로>`, 위험한 식이 없는 `find`를 더 받는다. find는 역슬래시(`\(`), `{`, `$`, 따옴표 밖 glob이 있으면 거부되고 `find`도 `cat`처럼 프로젝트 밖을 읽는다. git은 `{`, `$`가 있으면 거부된다(`HEAD@{1}` 포함).
 - [F2] auto 모드(`AutoModeHITLMiddleware`)는 게이트보다 먼저 판단한다. 분류기는 주 모델 응답을 감싸는 `awrap_model_call`에서, 승인 맵에 든 도구(`execute` 등) 중 결정적 허용(`_fixed_repo_command_allowed`, 설정한 좁은 셸 허용 목록) 밖의 호출을 모두 검토한다. 게이트는 그 뒤 도구 실행 때(`awrap_tool_call`) 판단한다. 그래서 게이트가 어차피 거부할 호출도 분류기를 거치고, 분류기가 거부하면(시간 초과 포함) 그 메시지(`Auto denied [...]`)가 게이트의 안내 문장 대신 모델에 간다. 분류기는 `_SHELL_CONTROL_RE`로 조합 명령을 결정적 허용에서 빼므로 F1에서 넓힌 읽기 명령도 분류기를 거친다. 게이트의 허용을 분류기의 허용으로 넘기지 않는다(우리 판정기가 분류기 우회로가 된다). 안전은 둘이 따로 막으므로 줄지 않는다. 비용과 지연, 메시지가 달라질 뿐이다.
 - [F2] 분류기 시간 제한은 기본 20초(`config_manifest.AUTO_CLASSIFIER_TIMEOUT_SECONDS_DEFAULT`)이고, 재시도 대기도 이 안에 든다. 분류기 모델은 지정하지 않으면 주 모델이다. 바꾸는 법: `DEEPAGENTS_CODE_AUTO_CLASSIFIER_TIMEOUT`이나 `config.toml` `[models].auto_classifier_timeout`(1~300초, 다음 시작부터), `DEEPAGENTS_CODE_AUTO_CLASSIFIER_MODEL`이나 `[models].auto_classifier`나 `--auto-classifier-model`(더 빠른 별도 모델). 프로젝트 `.env`로는 둘 다 정할 수 없다. 시간 초과는 그 호출을 거부하고(실행하지 않음), 연속 2번 뒤의 검토부터는 사람 승인으로 넘어간다(`_CONSECUTIVE_UNAVAILABLE_FALLBACK`). 실사용에서 본 20초 초과는 재현하지 못했다. 같은 모델 `glm-5.3-flash-ultrafast`로 체크포인트에 남은 분류기 요청 다섯 개(성공한 것들. 시간 초과 난 요청은 판정 뒤에만 저장돼 남지 않는다)를 세 번씩 0.7~4.9초, 시간 초과 난 호출을 직전 기록과 앞선 호출로 재구성한 요청은 여섯 번 3.5~7.9초(모두 거부 판정)였다. 재구성이고 새로 만든 모델 객체라 실행 당시의 모델 설정과는 다를 수 있다.

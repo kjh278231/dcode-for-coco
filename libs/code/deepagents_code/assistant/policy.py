@@ -20,7 +20,7 @@ from deepagents_code.assistant.options import (
 )
 
 # 읽기 전용 git 판정은 auto mode와 같은 기준을 써야 해서 비공개 함수를 가져온다.
-from deepagents_code.auto_mode import _fixed_repo_command_allowed
+from deepagents_code.auto_mode import _SHELL_CONTROL_RE, _fixed_repo_command_allowed
 from deepagents_code.config import (
     RECOMMENDED_SAFE_SHELL_COMMANDS,
     contains_dangerous_patterns,
@@ -37,15 +37,25 @@ Decision = Literal["allow", "deny", "needs_scope_check"]
 _SUMMARY_MAX = 200
 # [F1] 업스트림 목록에 echo만 더한다. 리다이렉트는 따로 거부되므로 출력만 한다
 _READ_ONLY_COMMANDS = [*RECOMMENDED_SAFE_SHELL_COMMANDS, "echo"]
-# [F1] 쓰기가 없는 리다이렉트 두 가지. 공백으로 떨어진 토큰일 때만 지운다
+# [F1][F5] 쓰기가 없는 리다이렉트: `2>&1`, /dev/null로 가는 `>`, `1>`, `2>`.
+# `&>`는 받지 않는다. sh(dash)에서는 `cmd &`와 `>/dev/null`로 나뉘어 뒤가 실행된다
+# 앞은 스페이스나 시작, 뒤는 스페이스, 끝, `;`, `|`, `&&`일 때만 지운다.
+# 단독 `&`가 붙으면 지우지 않아 거부된다
 # bash는 공백, 탭, 줄바꿈으로만 나눈다. \s의 유니코드 공백으로 경계를 잡으면 안 된다
-_HARMLESS_REDIRECT_RE = re.compile(r"(?<![^ ])2>(?:&1|/dev/null)(?![^ ])")
+_HARMLESS_REDIRECT_RE = re.compile(r"(?<![^ ])(?:2>&1|[12]?>/dev/null)(?= |\Z|;|\||&&)")
+# [F5] find에서 실행하거나 쓰는 식. 앞부분 일치라 -execdir, -okdir, -fprint0,
+# -fprintf도 잡는다. -rm은 bfs의 -delete 별칭
+_FIND_WRITE_PRIMARIES = ("-exec", "-ok", "-delete", "-fprint", "-fls", "-rm")
+_QUOTED_RE = re.compile(r"'[^']*'|\"[^\"]*\"")
 # 업스트림 is_shell_command_allowed와 같은 분할
 _SHELL_SPLIT_RE = re.compile(r"&&|\|\||[|;]")
 # `cat () ( touch x ) && cat`처럼 허용 이름으로 함수를 정의하면 첫 토큰 검사를 지난다
 _FUNC_DEF_RE = re.compile(r"\(\s*\)")
 # glob이 `--output=x` 같은 파일 이름을 git 옵션으로 펼칠 수 있다
 _GLOB_CHARS = frozenset("*?[")
+# [F5] 중괄호 펼침(`{--output=f,HEAD}`)과 `$@`, `$1`도 옵션을 만든다
+# (업스트림은 `$` 뒤 글자만 막는다)
+_GIT_UNSAFE_CHARS = _GLOB_CHARS | {"{", "$"}
 _PROTECTED_NAMES = "|".join(re.escape(d.split("/", 1)[1]) for d in PROTECTED_DIRS)
 # 보호 폴더 자체, 또는 그 상위인 .deepagents 전체(뒤에 구분자·끝·glob)를 잡는다.
 _PROTECTED_MENTION_RE = re.compile(
@@ -146,15 +156,52 @@ def is_read_only_shell(command: object, project_root: Path) -> bool:
 
 
 def _git_read_only(command: str, project_root: Path) -> bool:
-    return _GLOB_CHARS.isdisjoint(command) and _fixed_repo_command_allowed(
-        command, project_root
+    # [F5] 아래에서 shlex로 다시 짜므로 줄바꿈 같은 구분자를 원문에서 먼저 막는다.
+    # 다시 짠 문자열에서는 줄바꿈이 공백이 돼 `status\ntouch x`가 지나간다
+    if not _GIT_UNSAFE_CHARS.isdisjoint(command) or _SHELL_CONTROL_RE.search(command):
+        return False
+    # [F5] `git -C <루트>`는 루트로 간 `cd` 뒤의 git과 같다. 떼고 업스트림에 넘긴다
+    try:
+        parts = shlex.split(command)
+    except ValueError:
+        return False
+    if (
+        parts[:2] == ["git", "-C"]
+        and len(parts) > 2  # noqa: PLR2004  # git -C <경로>
+        and _abs_dir(parts[2]) == project_root.resolve()
+    ):
+        command = shlex.join(["git", *parts[3:]])
+    return _fixed_repo_command_allowed(command, project_root)
+
+
+def _find_read_only(segment: str) -> bool:
+    """[F5] 실행하거나 쓰는 식이 없는 find인가.
+
+    따옴표 밖의 glob, 중괄호, `$`, 역슬래시가 있으면 펼친 결과가 식이 될 수 있어
+    거부한다. 따옴표를 푼 토큰이 위험한 식으로 시작해도 거부한다.
+
+    Returns:
+        읽기 전용으로 확인되면 True.
+    """
+    if any(c in segment for c in "\\${"):
+        return False
+    unquoted = _QUOTED_RE.sub("", segment)
+    if any(c in unquoted for c in "*?['\""):
+        return False
+    try:
+        parts = shlex.split(segment)
+    except ValueError:
+        return False
+    return parts[:1] == ["find"] and not any(
+        p.startswith(_FIND_WRITE_PRIMARIES) for p in parts
     )
 
 
 def _read_only_chain(command: str, project_root: Path) -> bool:
     """[F1] 조합 명령의 모든 조각이 읽기 전용인가.
 
-    `2>&1`, `2>/dev/null`만 지우고 나머지는 업스트림 검사에 맡긴다. 맨 앞의
+    `2>&1`과 /dev/null로 가는 리다이렉트만 지우고 나머지는 업스트림 검사에
+    맡긴다. find는 실행하거나 쓰는 식이 없을 때만 받는다. 맨 앞의
     `cd <절대 경로>`는 받지만, 그 뒤의 git은 `cd`가 프로젝트 루트일 때만 받는다.
     다른 저장소(하위 폴더의 중첩 저장소 포함)의 설정이 git 명령에서 프로그램을
     돌릴 수 있어서다.
@@ -175,6 +222,7 @@ def _read_only_chain(command: str, project_root: Path) -> bool:
         git_ok = cd_target == project_root.resolve()
     return bool(segments) and all(
         is_shell_command_allowed(s, _READ_ONLY_COMMANDS)
+        or _find_read_only(s)
         or (git_ok and _git_read_only(s, project_root))
         for s in segments
     )
@@ -185,15 +233,16 @@ def _cd_target(segment: str) -> Path | None:
         parts = shlex.split(segment)
     except ValueError:
         return None
-    # 절대 경로만 받는다. 상대 경로는 CDPATH, `-`는 OLDPWD, `~`는 홈으로 간다
-    if (
-        len(parts) != 2  # noqa: PLR2004  # cd와 경로 하나
-        or parts[0] != "cd"
-        or not parts[1].startswith("/")
-        or any(c in parts[1] for c in "*?[")
-    ):
+    if len(parts) != 2 or parts[0] != "cd":  # noqa: PLR2004  # cd와 경로 하나
         return None
-    return normalize_tool_path(parts[1])
+    return _abs_dir(parts[1])
+
+
+def _abs_dir(raw: str) -> Path | None:
+    # 절대 경로만 받는다. 상대 경로는 CDPATH, `-`는 OLDPWD, `~`는 홈으로 간다
+    if not raw.startswith("/") or any(c in raw for c in "*?["):
+        return None
+    return normalize_tool_path(raw)
 
 
 def mentions_protected(command: str) -> bool:

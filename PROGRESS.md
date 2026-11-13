@@ -311,6 +311,25 @@
   - 문서: SPEC 3.4 의사 코드 1), 3)과 검사 문단, DECISIONS O17, FOLLOWUPS(업스트림에 남은 같은 우회, `hostname <이름>`).
 - 확인 못 한 것: 실제 모델이 새 거부 문장을 받고 읽기 도구로 옮겨 가는지(가짜 모델로만). 서브에이전트의 넓어진 `execute`를 실제로 돌려 보지 않았다(같은 함수라 단위 테스트로 갈음). F2의 20초 초과 원인(일시적 지연으로 추정). auto 모드에서 분류기가 시간 초과로 거부한 호출은 게이트의 안내 문장을 받지 못한다. `ty` 안 돌림.
 
+## F5. 계획 전 셸 판정 2차 — 완료 (2026-11-13)
+
+릴리스본 `dcode-a`(모델 glm-5.3-flash)를 `~/workspace/deepagents-coco`에서 쓰다가 읽기 명령 네 개가 아직 `no_approved_plan`으로 거부됐다: `ls /root/a.py 2>/dev/null; ls /root/b.py`, `ls /root/README.md >/dev/null && echo ok`, `git -C <루트> status --short --branch && git -C <루트> log --oneline -3`, `find /root -maxdepth 3 -name "pyvenv.cfg"`.
+
+- 수정(assistant만): `policy.py`(`_HARMLESS_REDIRECT_RE` 경계와 /dev/null 리다이렉트, `_git_read_only`의 `git -C <루트>`와 `_GIT_UNSAFE_CHARS`, 새 `_find_read_only`·`_FIND_WRITE_PRIMARIES`·`_QUOTED_RE`, `_cd_target`에서 뺀 `_abs_dir`), `prompts.py`(`GATE_BASE` 1번 아래 한 줄: 승인 전에는 셸 대신 `read_file`, `glob`, `grep`이나 탐색 서브에이전트로 읽는다). 업스트림 파일은 고치지 않아 baseline은 돌리지 않았다.
+- 판정(O19): 첫 명령은 버그(토큰 뒤를 스페이스·끝만 경계로 봄)라 뒤 경계를 스페이스, 끝, `;`, `|`, `&&`로 넓혔다. 단독 `&`는 경계가 아니라 남은 `>`로 거부된다. `>/dev/null`, `1>/dev/null`을 더 지운다(대상이 정확히 `/dev/null`일 때만). 요청에 있던 `&>/dev/null`은 받지 않았다(O21): `execute`가 쓰는 `/bin/sh`(dash)에서는 `echo a &>/dev/null touch pw`가 `echo a &`와 `>/dev/null touch pw`로 나뉘어 `pw`를 실제로 만들었다. 같은 뜻은 `>/dev/null 2>&1`로 받는다. `git -C <경로>`는 경로가 절대 경로이고 루트 자체로 풀릴 때만 떼고 업스트림 git 검사에 넘긴다(앞의 `cd` 규칙과 같음). find는 실행·쓰기 식(GNU 4.9 man: -exec, -execdir, -ok, -okdir, -delete, -fls, -fprint, -fprint0, -fprintf, 그리고 bfs의 -rm)이 따옴표를 푼 어떤 토큰의 앞부분에도 없고, 역슬래시·`$`·`{`·따옴표 밖 glob이 없을 때만 받는다(펼침으로 식을 만들 수 있다). 따옴표 안 glob(`-name "*.py"`)은 받는다.
+- 전부터 있던 우회(O20): `git log {--output=pw1,HEAD}`, `git log $@--output=pw2`가 F1 판정을 통과했고 임시 저장소에서 `bash -c`로 실제로 파일을 썼다(`$@`는 dash도 같음, 중괄호는 bash만)(업스트림은 `$@`, `$1`, 중괄호를 안 본다). git 판정에 `{`, `$` 거부를 더했다. `git show HEAD@{1}`도 거부된다. 업스트림 auto 모드 결정적 허용에는 남아 FOLLOWUPS F4에 적었다.
+- 검사:
+  - `check.sh unit` 409 passed(F1 리뷰 뒤 316 + 새 94: `test_f5_read_only_allowed` 13, `test_f5_lookalikes_denied` 80, `test_gate.py` `test_f5_*` 1. `test_f1_write_capable_lookalikes_denied`에서 허용으로 바뀐 `ls 1>/dev/null` 1개를 뺐다).
+  - `check.sh lint` 통과.
+  - `test_gate.py` `test_f5_observed_read_only_shell_runs_in_real_shell`: 관찰된 형태의 명령을 실제 셸로 돌려 출력이 나오고, `'-delete'`를 붙인 find와 `echo a &>/dev/null touch pw`는 거부되고 파일이 남거나 안 생긴다.
+  - 변이 12개 모두 테스트가 실패했다: 경계를 옛 것으로(6건), fd를 `[0-9&]`로(1), lookahead 제거(7), `-C`를 아무 절대 경로나(2), `-delete` 빼기(8), `$`·`{` 검사 빼기(3), 따옴표 밖 glob 검사 빼기(3), git에서 `{`·`$` 빼기(3), 식을 앞부분 대신 정확히 일치로(4), find 검사 빼기(4), `&>/dev/null` 지우기(4, 실제 셸 테스트 포함), `-ok` 빼기(2). lookahead에 단독 `&` 넣기는 테스트가 통과했다(지운 뒤 남은 단독 `&`를 업스트림이 다시 잡는 이중 방어). 모두 되돌렸다.
+- 명세와 다르게 한 점 (SPEC 3.4 의사 코드 3), 4a), 4e), 4f)와 이유·검사 문단, 4장 `GATE_BASE` 요지, 14장 [F1] 줄에 `[F5]`로 반영함): 위 셋과 git `{`, `$` 거부.
+- 확인 못 한 것: 실제 모델(glm-5.3-flash)이 새 프롬프트 줄로 셸 대신 읽기 도구를 쓰는지(가짜 모델로만). auto 모드에서는 넓힌 명령도 분류기를 먼저 거친다(F2와 같음). BSD find는 확인 안 함(위험한 식 이름은 같은 계열). `ty` 안 돌림.
+- 리뷰 뒤 수정:
+  - `git -C <루트> status\ntouch pw`가 True였다(이번 변경에서 생긴 우회). `-C`를 떼고 `shlex.join`으로 다시 짠 문자열에는 줄바꿈이 공백으로 바뀌어 업스트림 `_SHELL_CONTROL_RE`가 못 봤다. 임시 저장소에서 `sh -c`, `bash -c` 모두 `pw`를 만들었다. `_git_read_only` 첫 검사에 원문의 `_SHELL_CONTROL_RE`를 더했다. `test_f5_lookalikes_denied`에 4줄(`\n`, `\r`, `;`, 따옴표 안 `;`).
+  - 시도했고 이미 거부되던 것: `>/dev/null;>x`, `>/dev/null&&>x`, `1>/dev/null>x`, `>/dev/null||x`, `2>/dev/null|&touch x`, `;;`, `-C<경로>`, `-C=`, `-C 루트 -C 다른곳`, `-C 루트 --git-dir=`, `-C 루트/링크/..`(실제 경로로 풀어 루트가 아님), `find . '-ex'ec`, `find . -name "-exec"`, `find . -fls=x`, `find … # -exec`. 허용되지만 무해: `-C 루트/.`, `-C 루트/`, `find -D exec`, `find ~`, 주석 `#`(셸이 덜 실행).
+  - `check.sh unit` 413 passed(409 + 4), `check.sh lint` 통과.
+
 ## M9. 보정과 README — 다음
 
-먼저 볼 것: `FOLLOWUPS.md`(F2의 남은 일: auto 분류기를 건너뛰는 업스트림 수정 검토. F4: 업스트림 읽기 전용 판정에 남은 우회). M8의 함정 과제가 T8용 신호를 만들지 못한 문제도 M8 절에 있다.
+먼저 볼 것: `FOLLOWUPS.md`(F2의 남은 일: auto 분류기를 건너뛰는 업스트림 수정 검토. F4: 업스트림 읽기 전용 판정에 남은 우회, F5에서 찾은 `{`, `$@` 포함). M8의 함정 과제가 T8용 신호를 만들지 못한 문제도 M8 절에 있다.
