@@ -16,7 +16,7 @@
 set -euo pipefail
 
 DAY09="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DCODE="$DAY09/libs/code/.venv/bin/dcode"
+DCODE="${DCODE:-$DAY09/libs/code/.venv/bin/dcode}"
 if [[ ! -x "$DCODE" ]]; then
   echo "오류: 먼저 libs/code/.venv에 dcode를 설치하세요." >&2
   exit 2
