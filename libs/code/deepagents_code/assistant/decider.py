@@ -275,6 +275,68 @@ class FakeDecider:
         return verdicts
 
 
+# 질문 문구. Jev 보정(`calibration/`)이 같은 객체로 평가하고 여기서 고친다.
+J1 = Noul(
+    name="J1",
+    instructions="계획의 완료 조건 하나하나를 명령 실행이나 테스트로 "
+    "참 거짓을 가릴 수 있는가?",
+    true="모든 완료 조건에 실행해서 참 거짓을 가릴 방법"
+    "(테스트 이름, 명령, 기대하는 출력이나 종료 코드)이 있다.",
+    false="완료 조건 중 하나라도 '잘 동작한다', '깔끔해진다', '만족한다', "
+    "'충분하다'처럼 사람의 느낌에 기대거나, 눈으로 보는 수동 확인뿐이거나, "
+    "실행으로 확인할 방법이 없다.",
+)
+J2 = Noul(
+    name="J2",
+    instructions="계획의 작업 범위와 수정 대상이 "
+    "요구사항이 필요로 하는 것 안에 있는가?",
+    true="모든 작업과 수정 대상이 요구사항을 이루는 데 필요하다.",
+    false="요구사항이 요구하지 않은 기능, 옵션, 리팩터링, 공개 함수의 "
+    "시그니처 변경, 파일 수정이 하나라도 범위에 들어 있다.",
+)
+J3 = Noul(
+    name="J3",
+    instructions="작업 순서와 테스트 방법이 수정 대상(targets)에 대응하는가?",
+    true="수정 대상마다 그것을 고치는 단계가 있고, 테스트 명령이 그 변경을 검사한다.",
+    false="단계가 없는 수정 대상이 있거나, "
+    "수정 대상 밖의 파일을 고치는 단계가 있거나, "
+    "테스트 명령이 변경과 무관하다.",
+)
+J4 = Noul(
+    name="J4",
+    instructions="이 도구 호출이 승인된 계획의 범위 안에 있는가?",
+    true="호출이 계획의 작업 범위와 작업 순서를 수행하는 데 필요하다.",
+    false="호출이 수정 대상과 작업 범위에 없는 파일(작업 범위가 고치지 않겠다고 "
+    "한 문서 포함)을 바꾸거나, 계획과 무관하거나, 되돌리기 어려운 일을 한다.",
+)
+J5 = Noul(
+    name="J5",
+    instructions="이 요청을 처리하려면 저장소의 파일을 바꿔야 하는가?",
+    true="요청이 코드, 설정, 문서 파일의 생성, 수정, 삭제를 요구한다.",
+    false="요청이 질문, 설명, 조사처럼 파일을 바꾸지 않고 답할 수 있는 것이다.",
+)
+
+
+def noul_j6(name: str, description: str) -> Noul:
+    """작업 기록 하나에 대한 J6 질문을 만든다.
+
+    Args:
+        name: 기억 이름.
+        description: 기억 설명.
+
+    Returns:
+        이름이 `J6:<기억 이름>`인 질문.
+    """
+    return Noul(
+        name=f"J6:{name}",
+        instructions="다음 작업 기록이 이 요청을 처리하는 데 참고가 되는가? "
+        f"기록 {name}: {description}",
+        true="기록이 요청과 같은 파일, 함수, 기능, 결정, 오류를 다룬다. "
+        "바꾸는 내용이 달라도 같은 함수를 다루면 참고가 된다.",
+        false="기록이 요청과 다른 기능이나 파일을 다루어 참고할 것이 없다.",
+    )
+
+
 def _state(*parts: str) -> str:
     kept = [p for p in parts if p]
     text = "\n\n".join(kept)
@@ -307,13 +369,7 @@ def question_j1(plan: Plan) -> tuple[str, Noul]:
         f"## 테스트 명령\n{plan.test_command}",
         _section(plan, "요구사항"),
     )
-    return state, Noul(
-        name="J1",
-        instructions="계획의 완료 조건을 명령 실행이나 테스트로 확인할 수 있는가?",
-        true="완료 조건마다 실행해서 참 거짓을 가릴 방법"
-        "(테스트, 명령, 관찰할 출력)이 있다.",
-        false="완료 조건이 '잘 동작한다'처럼 모호하거나, 실행으로 확인할 방법이 없다.",
-    )
+    return state, J1
 
 
 def question_j2(plan: Plan) -> tuple[str, Noul]:
@@ -330,13 +386,7 @@ def question_j2(plan: Plan) -> tuple[str, Noul]:
         _targets(plan),
         _section(plan, "요구사항"),
     )
-    return state, Noul(
-        name="J2",
-        instructions="계획의 작업 범위와 수정 대상이 "
-        "요구사항이 필요로 하는 것 안에 있는가?",
-        true="모든 작업과 수정 대상이 요구사항을 이루는 데 필요하다.",
-        false="요구사항에 없는 기능, 리팩터링, 파일 수정이 범위에 들어 있다.",
-    )
+    return state, J2
 
 
 def question_j3(plan: Plan) -> tuple[str, Noul]:
@@ -354,15 +404,7 @@ def question_j3(plan: Plan) -> tuple[str, Noul]:
         f"## 테스트 명령\n{plan.test_command}",
         _section(plan, "완료 조건"),
     )
-    return state, Noul(
-        name="J3",
-        instructions="작업 순서와 테스트 방법이 수정 대상(targets)에 대응하는가?",
-        true="수정 대상마다 그것을 고치는 단계가 있고, "
-        "테스트 명령이 그 변경을 검사한다.",
-        false="단계가 없는 수정 대상이 있거나, "
-        "수정 대상 밖의 파일을 고치는 단계가 있거나, "
-        "테스트 명령이 변경과 무관하다.",
-    )
+    return state, J3
 
 
 def question_j4(
@@ -387,13 +429,7 @@ def question_j4(
         _section(plan, "요구사항"),
         _section(plan, "작업 순서"),
     )
-    return state, Noul(
-        name="J4",
-        instructions="이 도구 호출이 승인된 계획의 범위 안에 있는가?",
-        true="호출이 계획의 작업 범위와 작업 순서를 수행하는 데 필요하다.",
-        false="호출이 계획에 없는 파일을 바꾸거나, 계획과 무관하거나, "
-        "되돌리기 어려운 일을 한다.",
-    )
+    return state, J4
 
 
 def question_j5(request: str, exploration: str) -> tuple[str, Noul]:
@@ -407,12 +443,7 @@ def question_j5(request: str, exploration: str) -> tuple[str, Noul]:
         (state, 질문).
     """
     state = _state(f"## 요청\n{request}", f"## 탐색 결과\n{exploration}")
-    return state, Noul(
-        name="J5",
-        instructions="이 요청을 처리하려면 저장소의 파일을 바꿔야 하는가?",
-        true="요청이 코드, 설정, 문서 파일의 생성, 수정, 삭제를 요구한다.",
-        false="요청이 질문, 설명, 조사처럼 파일을 바꾸지 않고 답할 수 있는 것이다.",
-    )
+    return state, J5
 
 
 def questions_j6(
@@ -430,14 +461,4 @@ def questions_j6(
         (state, 질문 목록). 질문 이름은 `J6:<기억 이름>`.
     """
     state = _state(f"## 요청\n{request}")
-    questions = [
-        Noul(
-            name=f"J6:{r.name}",
-            instructions="다음 작업 기록이 이 요청을 처리하는 데 참고가 되는가? "
-            f"기록 {r.name}: {r.description}",
-            true="기록이 요청과 같은 파일, 기능, 결정, 오류를 다룬다.",
-            false="기록이 요청과 다른 기능이나 파일을 다루어 참고할 것이 없다.",
-        )
-        for r in records
-    ]
-    return state, questions
+    return state, [noul_j6(r.name, r.description) for r in records]

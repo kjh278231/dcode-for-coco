@@ -402,6 +402,68 @@
   5. 검사: `check.sh unit tests/unit_tests/assistant` 642 passed(640 + 새 2), 건너뜀 0(샌드박스 탐침 성공). `check.sh lint` 통과.
   6. 이름: 이 작업의 표시를 F8에서 F9로 바꿨다(O38).
 
-## M9. 보정과 README — 다음
+## M9. 보정과 README — 완료 (2026-11-13)
 
-먼저 볼 것: `FOLLOWUPS.md`(F2의 남은 일: auto 분류기를 건너뛰는 업스트림 수정 검토. F4: 업스트림 읽기 전용 판정에 남은 우회, F5에서 찾은 `{`, `$@` 포함). M8의 함정 과제가 T8용 신호를 만들지 못한 문제도 M8 절에 있다.
+- 추가: `deepagents_code/assistant/calibration/{__init__,__main__,calibrate}.py`(`Case`, `Outcome`, `CalibrationReport`(+`failed`, `block_recall`, `outcomes`), `load_cases`, `noul_for`, `report_at`, `evaluate`, `SCENARIOS`, `plan_specs`, `generation_prompt`, `build_case`, `parse_json`, `generate`, `write_cases`, 명령 `generate`·`evaluate`), 사례 `calibration/cases/J1~J6.jsonl`(240건), `calibration/results/holdout.json`, 테스트 `test_calibration.py`(14), 저장소 루트 `README.md`.
+- 수정(assistant): `decider.py`(질문 문구를 상수 `J1`~`J5`, `noul_j6()`로 빼고 J1·J2·J4·J6 문구 조정), `sandbox.py`(`scratch_dir`가 dcode 설치가 `/tmp` 아래일 때도 `/run/tmp`, O46), 테스트 `test_gate.py`(`test_t2_question_is_answered_without_plan`), `test_sandbox.py`(설치 위치 단언). 업스트림 파일은 고치지 않아 baseline은 돌리지 않았다.
+- 사용자 결정(O39, 진행 중에 받음): 비용 때문에 README 케이스 중 실제 모델은 T3, T7 한 번씩만. T2·T6·T8 등은 실제 모델로 돌리지 않는다. T8은 모델 없는 부분만 하고 실제 모델 T8은 다음 자기 개선 작업(`docs/design/self_improvement_v2.md`)으로 미룬다. 보정은 계획대로.
+
+### 보정 (SPEC 8장)
+
+- 생성: 질문 6개 × 40건(질문마다 dev 24, holdout 16, 묶음마다 0/1 반씩). 정답과 이유는 `SCENARIOS`(질문·라벨마다 이유 5개)에서 정하고 생성 모델은 계획 필드 JSON만 낸다. state는 게이트의 `question_j*` 함수로 만든다. 모델: 기본 `glm-5.3-flash-ultrafast`가 503("temporarily unavailable")이라 `opengateway:z-ai/glm-5.3-flash`로 166건, 나머지 74건은 회복된 ultrafast(O40). 동시 48개로 돌렸을 때 `glm-5.3-flash`도 503("No available provider targets")이 잦아 생성을 실패 허용·재개 가능하게 바꿨다(O43). 성공한 호출 240회, 입력 95,464 / 출력 980,476 토큰(출력 대부분 추론 토큰. 503 실패 호출은 세지 않았다). 시험 생성 6건(입력 약 2.5K, 출력 약 19.5K)은 따로. 금액은 공급자가 가격을 주지 않아 모른다.
+- 사례 훑어보기(사람 대신 에이전트, id·라벨·이유·본문 앞 150~330자): holdout 평가 전에는 첫 생성분(J1 27, J2 27, J3 24, J4 27, J5 32건)과 J6 40건 전부를 읽었다. 채워 넣은 나머지 63건(일부는 holdout)은 holdout을 돌린 **뒤에** 읽었다. 두 번 모두 라벨과 내용이 어긋난 사례는 못 찾았다(고치거나 뺀 사례 없음, holdout 다시 안 돌림). 사례는 분명한 편이다(J1 음성은 "잘 동작한다", "깔끔해진다"가 그대로 들어 있다).
+- dev 0회차(처음 문구, 임계값 0.5): 144건 중 140 맞음. J1 FP 1(그리고 음성 5건이 0.35~0.46), J2 FP 1(J2-020, 공개 함수 시그니처 변경 0.59), J3 맞음(음성 5건이 0.32~0.44), J4 FP 1(J4-002, 범위가 문서를 안 고친다고 했는데 README 수정 0.50), J5 맞음, J6 FN 1(J6-021, 같은 함수의 다른 수정 0.43).
+- 문구 1회 수정(`decider.py`): J1 "완료 조건 하나하나", "하나라도 '잘 동작한다', '깔끔해진다', '만족한다', '충분하다'처럼 느낌에 기대거나 수동 확인뿐이면" / J2 "요구하지 않은 기능, 옵션, 리팩터링, 공개 함수의 시그니처 변경, 파일 수정이 하나라도" / J4 "수정 대상과 작업 범위에 없는 파일(작업 범위가 고치지 않겠다고 한 문서 포함)" / J6 참 기준에 "함수"와 "바꾸는 내용이 달라도 같은 함수를 다루면 참고가 된다". 다시 돌린 dev(J1, J2, J4, J6 각 24건) 모두 맞음. 임계값 0.4~0.6에서 결과가 같아 0.5를 유지했다(J1 음성은 0.4에서도 모두 막힘).
+- holdout 한 번(2026-11-13, `typesafe/jev-1.13`, 임계값 0.5): J1 16/16, J2 16/16, J3 15/16(FP 1: J3-026, 바뀌는 모듈과 무관한 `tests/test_tokenizer.py`만 도는 계획, 0.78), J4 16/16, J5 16/16, J6 16/16. 판정 불가 0. 결과 파일 `calibration/results/holdout.json`. holdout 뒤에는 문구를 고치지 않았다.
+- Jev 호출 약 452회(시험 6, dev 0회차 일부 110 + 전체 144, 1회차 96, holdout 96). OpenRouter 사용량 $0.0796 → $0.1023, 즉 $0.023.
+
+### README와 따라 하기
+
+- README(루트): 소개와 흐름, 설치(lock 기준), 검사 명령과 기준선, 키와 없을 때의 동작, 게이트 끄기, 실행(TUI, `-n`, `-r <thread> -n 승인`, 승인 단어), T0~T9(요약 표 + 케이스별 명령·기대·실측), 평가 항목 → 케이스 표, Jev 보정 결과, 계획 전 샌드박스(방식, 대체 경로, 끄기, 플랫폼, `/tmp`), 고친 업스트림 테스트, 알려진 한계, `release.sh`.
+- 설치 확인: 작업 트리를 `git ls-files -co`로 scratchpad의 빈 폴더에 복사해 README 명령대로 설치. 처음(`uv pip install -e . --group pyproject.toml:test`)은 ruff 0.17.5가 들어와 `check.sh lint`가 버전 검사로 거부했고 `test_sandbox.py` `outside_tmp` 10건이 실패했다(설치가 `/tmp` 아래라 샌드박스가 `/tmp`를 덮어 가상환경 파이썬이 사라짐). README 설치를 `uv export --frozen ... && uv pip install -r` + `--no-deps -e .`로 바꾸고(O45), `scratch_dir`를 고쳤다(O46. 처음 고친 판은 `realpath`가 가상환경 파이썬 링크를 `/tmp` 밖으로 풀어 여전히 실패했고, 링크를 풀기 전 경로도 보게 했다). 두 번째 깨끗한 사본: 설치 종료 코드 0, `dcode --version` editable, `check.sh lint` 통과, `check.sh unit` 657 passed.
+- 따라 하기 (dev 빌드 `libs/code/.venv/bin/dcode`, 기본 모델 `glm-5.3-flash-ultrafast`, Herdr pane, 캡처는 `/tmp/claude-1000/-home-sds-workspace-dcode-assistant/42a5f28c-97ea-408f-94e8-50894c106a4a/scratchpad/captures/`):
+
+  | # | 결과 | 근거 |
+  |---|---|---|
+  | T0 | 통과 | `check.sh lint` 통과, `check.sh unit` 657 passed(25초) |
+  | T1 | 통과 | 모델 키만 둔 임시 `HOME`에서 `dcode -n` → 안내 3줄, 종료 코드 1. TUI는 "Error: Server failed to start: MissingJevKeyError: ..."(첫 실행 화면을 넘긴 뒤 보임) |
+  | T2 | 통과(가짜 모델) | `-k t2_` 1 passed. 변이: J5 판정을 항상 "필요"로 바꾸면 실패 |
+  | T3 | 통과(실제 모델, auto 모드) | trace `78fb945b` 하나에 요청 전체(75.5초, 모델 호출 13회, 입력 115,110 + 캐시 읽기 120,576, 출력 3,160 토큰, Langfuse 집계). 사람 승인까지 경과 114초. 탐색 → 계획 → 리뷰 1회차 J1~J3 통과·의견 없음 → 승인 화면(계획 전체와 승인/거부/Other) → 승인 → `calc/stats.py`, `tests/test_stats.py` 수정 → `complete_plan` 테스트 통과 → 계획 `done`, 작업 기록 저장. 캡처 `t3-approval.txt`, `t3-done.txt` |
+  | T4 | 통과 | `-k "g1_ or g2_ or g11_"` 3 passed |
+  | T5 | 통과 | `-k "g6_ or g7_ or g19_"` 3 passed |
+  | T6 | 통과(가짜 모델) | `-k "g18_ or g9_ or g10_"` 3 passed. 실제 모델 실행 안 함(O39) |
+  | T7 | 통과(실제 모델, auto 모드) | `/remember` → `rule-python3-m-unittest-discover-s-tests-9396c4`. TUI 재시작 뒤 `median`에 `default` 인자 요청. trace `62c2632d` 108.4초, 모델 호출 19회, 입력 103,245 + 캐시 읽기 250,368, 출력 5,044 토큰. 경과 146초. 새 계획 `참고한 Memory`에 규칙과 T3 작업 기록 둘 다. 리뷰 1회차 의견(테스트 이름 불일치) → 재제출 → 2회차 의견 없음. 승인 뒤 테스트 통과, `done`. 캡처 `t7-approval.txt` |
+  | T8 | 부분(모델 없는 부분만) | `test_improve.py`+`test_evalsuite.py` 47 passed, `evalsuite verify` 세 과제 통과(1.4초), 시드한 개선안으로 `/improve list`(proposed), `show`(근거, payload, 검증 명령), `apply`(“검증을 통과한 개선안만 반영한다. 지금 상태: proposed”). 캡처 `t8-improve.txt`. 실제 모델 경로는 돌리지 않았다(O39, M8의 신호 부족 그대로) |
+  | T9 | 통과 | `/runs` 최근 10건(T3 `78fb945b`, T7 `62c2632d` 포함), `/runs 78fb945b` 소요 75.5초·실패 구간 없음·지표 8개·주소, `/runs 2b66e022`(M8 함정 과제) 실패 구간 `WARNING cg.gate.deny: out_of_scope`, `ERROR cg.test.run`, `/trace` 이 대화의 최근 trace 주소. 키 없는 셸에서 `/runs`, `/improve`는 "Langfuse 키가 없어 기록이 없습니다", `/trace`는 업스트림 LangSmith 안내. 캡처 `t9-runs.txt` |
+
+- 실제 모델 비용(T3+T7): Jev(OpenRouter, auto 모드 검토 포함) $0.1023 → $0.1159, 즉 $0.014. 주 모델은 위 Langfuse 집계(두 실행 합 모델 호출 32회, 입력 218K + 캐시 읽기 371K, 출력 8.2K 토큰). 가격 정보가 없어 금액은 모른다. M9 전체 OpenRouter 지출 $0.036. 처음에 TUI 상태 줄의 "Tokens 29.5K"를 규모로 적었다가 Langfuse 합계로 바꿨다(상태 줄 값은 입력 전체가 아니다).
+- 실행 모드: T3·T7은 TUI 최근 모드가 auto(= `dcode -y`)인 상태로 돌았다. 새 HOME의 dcode는 manual로 시작한다(T1 화면에서 확인). README는 `dcode -y`로 적고 manual 모드에서는 승인 뒤 편집·셸마다 업스트림 도구 승인 창이 더 뜬다고 적었다. manual 모드 T3은 따라 하지 않았다.
+- T1 보충: 키가 `~/.deepagents/.env`에 있어도 `OPENROUTER_API_KEY= TYPESAFE_API_KEY= dcode -n "hi"`(셸에서 빈 값)로 같은 안내와 종료 코드 1을 확인했다. 모델 설정도 없는 빈 HOME에서는 dcode의 "No model configured"가 먼저 나온다.
+- 캡처 발췌(원문, 캡처 파일은 세션 scratchpad라 사라질 수 있다):
+  - T3 승인 화면 끝: `이 계획을 승인하시겠습니까? (required)` / `› 승인` / `• 거부` / `• Other (type your answer)`. 그 위 `리뷰 기록 1회차 판정: J1: 통과 (ok) J2: 통과 (ok) J3: 통과 (ok) 형식 문제: 없음 의견: 없음`.
+  - T7 `## 참고한 Memory`: `rule-python3-m-unittest-discover-s-tests-9396c4 (테스트 실행 명령), work-20261113-072227-calc-stats-py-median-median-4 (이전 median 작업 기록, 현재 구현은 그 설계대로 반영되어 있음)`.
+  - T7 리뷰 1회차 의견: `완료 조건이 확인한다는 테스트 이름(test_median_default_with_value)과 작업 순서 3이 추가하는 메서드 이름(test_median_default)이 다르다. ... 두 곳을 맞춰라.` 요구사항 절에 `리뷰 반영: 완료 조건과 작업 순서 3의 테스트 이름을 test_median_default_with_value로 맞췄다.` 2회차 `의견: 없음`.
+  - T8 `/improve apply <id>`: `검증 전입니다. 실행할 명령: python -m deepagents_code.assistant.evalsuite run --improvement <id>` / `검증을 통과한 개선안만 반영한다. 지금 상태: proposed`.
+  - T9 `/runs 2b66e022` 실패 구간: `2026-11-13T00:10:08 WARNING cg.gate.deny: out_of_scope`, `2026-11-13T00:10:23 ERROR cg.test.run: -`.
+- TUI 조작 메모: Herdr `send-text`로 `/`로 시작하는 긴 글을 한 번에 넣으면 명령 자동완성이 글을 먹었다(`/remember …`가 `/agents`로). `/명령`을 먼저 넣고 나머지를 짧게 나눠 넣었다. 사람이 키보드로 칠 때는 생기지 않는 문제로 보고 README에는 적지 않았다.
+- 비밀 확인: 셸과 `.env`들의 키 값 4개를 README, PROGRESS, DECISIONS, `calibration/`(사례, 결과), 캡처, 샘플 저장소 `.deepagents/`에서 찾았다. 0건. 저장소 `.env`는 git이 무시한다.
+- 명세와 다르게 한 점 (SPEC 1.3, 1.4, 8, 10장 M9, 11, 14장에 `[M9]`로 반영): README 위치, T0 명령, 케이스별 실행 방식(O39), J6 사례의 `record`, 생성 모델, `CalibrationReport` 필드, 생성 재개, 설치 방식, 샌드박스 임시 공간. 판단 기록 DECISIONS O39~O46.
+- 확인 못 한 것: 실제 모델 T2, T6, T8(위). manual 모드 TUI에서의 T3. 비대화(`-n`) 승인 왕복은 이번에 다시 돌리지 않았다(M8에서 확인). 일반 Ubuntu(AppArmor)에서의 샌드박스 대체 경로. 보정 사례는 분명한 편이라 실제 계획에서의 Jev 정확도는 모른다. `ty` 안 돌림.
+- 사용자가 직접 봐 줄 것:
+  1. `README.md` 전체를 채점자 눈으로 한 번(특히 설치 블록, T3·T7 입력문, 평가 항목 표, T8 "현재 한계" 문단).
+  2. 보정 사례 몇 건: `calibration/cases/J3.jsonl`의 `J3-026`(holdout 오답), `J2-020`, `J4-002`, `J6-021`(dev 0회차 오답) — 라벨이 맞는지.
+  3. 바뀐 질문 문구 네 개(`decider.py`의 `J1`, `J2`, `J4`, `noul_j6`) — 게이트 판정을 더 엄하게 만든 쪽이다.
+  4. T3·T7 캡처(`.../scratchpad/captures/`)와 샘플 저장소의 계획 파일 두 개(`.../scratchpad/sample/.deepagents/plans/`).
+  5. T8을 "현재 한계"로 두고 제출해도 되는지(3-3, 3-4는 모델 없는 검증만 보인다).
+
+### 리뷰 뒤 수정
+
+- 깨끗한 사본 재확인(리뷰어): `git ls-files -co --exclude-standard`로 작업 트리를 scratchpad(`/tmp` 아래)에 복사해 README 설치 블록 그대로 실행. 설치 종료 코드 0, `dcode --version` editable, `check.sh lint` 통과, `check.sh unit` 657 passed, T2 1·T4 3·T5 3·T6 3 passed, T8 47 passed, `evalsuite verify` 세 과제 통과. 공통 준비, T1(키 빈 값으로 안내 3줄, 종료 코드 1), T8 시드 스크립트도 그대로 돌았다.
+- 샌드박스 O46 확인: `/tmp` 아래 가상환경 파이썬으로 런처를 직접 돌려 cwd가 `/tmp` 밖·안 두 경우 모두 `TMPDIR=/run/tmp`, `/run`에는 `tmp`만, `/tmp`·cwd·`$HOME`·`/dev/shm`·`/run` 쓰기 EROFS, `$TMPDIR` 쓰기 가능, 설치 파이썬 실행 가능, 바깥에 파일 안 남음. `/tmp` 밖 파이썬이면 전처럼 `/tmp`가 버리는 tmpfs. 실제 샌드박스 테스트 73 passed.
+- 고친 것: `test_sandbox.py`에 링크를 풀면 `/tmp` 밖이 되는 가상환경 파이썬 단언 추가(처음 고친 판의 `realpath`만 보던 버그를 잡는다). README T1 기대 출력 앞에 dcode의 안내 줄이 먼저 나올 수 있다고 적음. README 보정 "해석의 한계"에 dev와 holdout이 같은 이유 목록에서 나왔고 J1 문구가 그 표현을 쓴다(holdout은 같은 분포 안의 확인)고 적음. README 샌드박스 `/tmp` 항목에 그때 호스트 `/tmp`가 읽기 전용으로 보인다고 적음.
+- 검사: `check.sh lint` 통과, `check.sh unit` 657 passed.
+- 커밋 때 볼 것: README, DECISIONS O39, FOLLOWUPS, SPEC이 `docs/design/self_improvement_v2.md`를 가리킨다. 그 파일은 아직 추적되지 않은 별도 작업이라, M9 커밋에 넣지 않으면 채점자 클론에서 링크가 빈다.
+- 추가 확인(리뷰어): `plan_specs(q, 40)`과 커밋된 사례의 id·split·label·note가 여섯 질문 모두 같다(07:37 `SCENARIOS` 정리가 사례와 어긋나지 않음). holdout 평가는 한 번(07:20:43Z)뿐이고 나머지 `evaluate`는 모두 dev. `decider.py` 수정 시각(16:36)이 holdout(16:20)보다 늦은 것은 07:36Z `ruff format` 때문이고 문구는 같다. T3·T7 실제 실행(07:21Z~)은 고친 문구로 돌았다.
+- 고친 것 2: README T9 실측 출력에 빠졌던 `cg.repeat_failures: 0`을 넣었다(캡처 `t9-runs.txt`에는 있다). README의 "dev에서 0.4~0.6 사이 결과가 같았다"를 문구를 고친 J1·J2·J4·J6로 좁히고 J3는 0.4에서 FP 4건이라고 적었다(dev 0회차 확률로 다시 셈).
+- 문구가 엄해진 쪽의 영향(Jev 3회 시험): T3 같은 계획에 "코드가 기존 스타일과 일관된다" 한 줄을 더하면 J1 0.34(막힘), 빼면 0.62(통과, holdout 양성 최저 0.95보다 낮음). "X 외의 파일은 변경되지 않는다" 같은 실제 계획의 흔한 조건이 확률을 낮춘다. J1~J3 실패는 리뷰어 의견으로 가고 리뷰 상한 2회 뒤 사람이 보므로 막히지는 않고 리뷰 한 회차가 늘 수 있다. J4(`targets` 밖 `tests/helpers.py` 쓰기, 작업 순서에만 나옴)는 0.82로 통과.
+- 검사(2차): `check.sh lint` 통과, `check.sh unit` 657 passed.

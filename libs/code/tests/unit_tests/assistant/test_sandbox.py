@@ -112,11 +112,20 @@ def test_wrap_command_keeps_command_as_one_argument() -> None:
     assert words == ["exec", sys.executable, "-I", sandbox.LAUNCHER, command]
 
 
-def test_scratch_dir_moves_off_tmp_when_cwd_is_under_tmp() -> None:
+def test_scratch_dir_moves_off_tmp_when_cwd_is_under_tmp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sandbox.sys, "executable", "/usr/bin/python3")
     assert sandbox.scratch_dir("/tmp") == "/run/tmp"
     assert sandbox.scratch_dir("/tmp/x/y") == "/run/tmp"
     assert sandbox.scratch_dir("/tmpx") == "/tmp"
     assert sandbox.scratch_dir("/home") == "/tmp"
+    # [M9] dcode가 /tmp 아래 설치돼 있으면 /tmp를 가리지 않는다(설치 파이썬이 사라진다)
+    monkeypatch.setattr(sandbox.sys, "executable", "/tmp/clone/.venv/bin/python")
+    assert sandbox.scratch_dir("/home") == "/run/tmp"
+    # 가상환경 파이썬 링크는 /tmp 밖을 가리켜도 링크 경로로 판단한다
+    monkeypatch.setattr(sandbox.os.path, "realpath", lambda _: "/usr/bin/python3")
+    assert sandbox.scratch_dir("/home") == "/run/tmp"
 
 
 def test_switch_turns_sandbox_off() -> None:

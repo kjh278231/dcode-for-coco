@@ -73,7 +73,9 @@ DC/assistant/
     tasks/<이름>/      instruction.md, repo/, tests_target/, tests_regression/, task.toml
   calibration/
     __main__.py        python -m deepagents_code.assistant.calibration
+    calibrate.py       [M9] Case, CalibrationReport, evaluate, 생성(ruff가 __init__에 코드를 못 두게 한다)
     cases/J1.jsonl ... J6.jsonl
+    results/holdout.json  [M9] holdout 한 번의 사례별 확률
 
 libs/code/tests/unit_tests/assistant/
   test_frontmatter.py test_plan.py test_decider.py test_policy.py test_reviewer.py
@@ -112,7 +114,7 @@ libs/code/tests/unit_tests/assistant/
 | `DC/_env_vars.py` | [F7] 상수 `PLAN_SANDBOX` (`DEEPAGENTS_CODE_PLAN_SANDBOX`, 계획 전 샌드박스 끄기) | F7 |
 | `DC/agent.py` | [F7] `SubagentWriteBlockMiddleware(..., shell_sandbox=sandbox is None)` | F7 |
 | `libs/code/scripts/check_process_cwd.py` | [F7] `assistant/sandbox.py` `main`의 `os.getcwd` 허용 항목 추가 (O31) | F7 |
-| `libs/code/README.md` | 테스트 케이스와 실행 방법 | M9 |
+| `libs/code/README.md` | 테스트 케이스와 실행 방법. [M9] 고치지 않았다. 채점자의 입구인 저장소 루트 `README.md`에 썼다(O45) | M9 |
 
 `DC/tui/` 아래는 고치지 않는다. 승인과 질문은 기존 화면을 쓴다.
 
@@ -894,7 +896,7 @@ class PlanGateMiddleware(AgentMiddleware):
 
 [F9] 안전 논리: 샌드박스로 보내는 것은 전에 거부되던 호출뿐이다(J4 실패, 보호 폴더 언급). 샌드박스는 쓰기가 버리는 tmpfs 밖에서 모두 실패하고 네트워크가 없으니 거부보다 쓰기 능력이 늘지 않는다. 읽기 능력은 계획 전 샌드박스와 같다. J4가 통과시킨 execute와 계획 대상 쓰기 도구는 전처럼 샌드박스 밖이다. 쓰기 경로 도구(write_file, edit_file 등)의 J4 실패와 보호 경로는 전처럼 거부다. 보호 폴더 읽기는 원래 막을 뜻이 아니었다(탐색 에이전트는 `.deepagents/memory/`를 읽고, `ls`·`read_file` 도구로도 읽힌다. 거부 문장도 "고칠 수 없다"). 실사용에서 `git diff HEAD --stat | head -5; ls .deepagents/plans/ 2>/dev/null | head`가 거부됐고, 승인 뒤 계획 대상 밖의 읽기 전용 python 탐침이 J4에서 세 번 거부됐는데 같은 탐침은 통과하기도 했다.
 
-- 런처: `<sys.executable> -I <sandbox.py 절대 경로> <명령>`을 `exec`로 돌린다. user+mount+net+IPC+PID 네임스페이스(자기 uid 매핑), `/` 재귀 private, `/run`과 `/dev/pts` tmpfs, `mount_setattr(AT_RECURSIVE, RDONLY)`, 버리는 tmpfs(보통 `/tmp`, cwd가 `/tmp` 아래면 `/run/tmp`이고 `/tmp`는 읽기 전용), TMPDIR, RLIMIT_CORE 1 고정, seccomp(`socket`은 AF_INET, AF_INET6, AF_NETLINK만 열고 AF_UNIX, AF_VSOCK 등은 EPERM, 데이터그램 `socketpair`, io_uring, ptrace, process_vm_readv/writev, pidfd_getfd, add_key/request_key/keyctl, RLIMIT_CORE를 바꾸는 setrlimit/prlimit64는 EPERM, x32와 x86_64 밖은 종료), fork 두 번(새 PID 네임스페이스의 1번은 기다리기만 하고, 손자가 읽기 전용 새 `/proc`과 setsid), `/bin/sh -c <명령>`. [F7 리뷰] PID 네임스페이스로 밖의 같은 uid 프로세스에 시그널, prlimit, renice를 못 하고 `/proc`에 안 보이며, 명령이 끝나면 남은 백그라운드 프로세스도 커널이 죽인다. RLIMIT_CORE 고정은 core_pattern이 파이프(WSL `/wsl-capture-crash`)일 때 한도 0에서도 root 도우미가 덤프를 C: 드라이브에 쓰기 때문이다(한도 1만 덤프를 멈춘다). 설정이 실패하면 명령 없이 125와 `plan sandbox: setup failed, command not run`. [F9] 환경에 `PYTEST_ADDOPTS`(기존 값 뒤에 ` -o cache_dir=<버리는 tmpfs>/pytest-cache`)와 `PYTHONDONTWRITEBYTECODE=1`을 더한다. 실사용에서 pytest 캐시 쓰기가 EROFS 경고를 냈다. `-p no:cacheprovider`는 `cache` 픽스처를 쓰는 테스트를 깨서(리뷰에서 확인) 캐시를 버리는 공간으로 옮긴다.
+- 런처: `<sys.executable> -I <sandbox.py 절대 경로> <명령>`을 `exec`로 돌린다. user+mount+net+IPC+PID 네임스페이스(자기 uid 매핑), `/` 재귀 private, `/run`과 `/dev/pts` tmpfs, `mount_setattr(AT_RECURSIVE, RDONLY)`, 버리는 tmpfs(보통 `/tmp`, cwd가 `/tmp` 아래면 `/run/tmp`이고 `/tmp`는 읽기 전용. [M9] dcode 설치(`sys.executable`, 링크를 풀기 전후)가 `/tmp` 아래여도 같다), TMPDIR, RLIMIT_CORE 1 고정, seccomp(`socket`은 AF_INET, AF_INET6, AF_NETLINK만 열고 AF_UNIX, AF_VSOCK 등은 EPERM, 데이터그램 `socketpair`, io_uring, ptrace, process_vm_readv/writev, pidfd_getfd, add_key/request_key/keyctl, RLIMIT_CORE를 바꾸는 setrlimit/prlimit64는 EPERM, x32와 x86_64 밖은 종료), fork 두 번(새 PID 네임스페이스의 1번은 기다리기만 하고, 손자가 읽기 전용 새 `/proc`과 setsid), `/bin/sh -c <명령>`. [F7 리뷰] PID 네임스페이스로 밖의 같은 uid 프로세스에 시그널, prlimit, renice를 못 하고 `/proc`에 안 보이며, 명령이 끝나면 남은 백그라운드 프로세스도 커널이 죽인다. RLIMIT_CORE 고정은 core_pattern이 파이프(WSL `/wsl-capture-crash`)일 때 한도 0에서도 root 도우미가 덤프를 C: 드라이브에 쓰기 때문이다(한도 1만 덤프를 멈춘다). 설정이 실패하면 명령 없이 125와 `plan sandbox: setup failed, command not run`. [F9] 환경에 `PYTEST_ADDOPTS`(기존 값 뒤에 ` -o cache_dir=<버리는 tmpfs>/pytest-cache`)와 `PYTHONDONTWRITEBYTECODE=1`을 더한다. 실사용에서 pytest 캐시 쓰기가 EROFS 경고를 냈다. `-p no:cacheprovider`는 `cache` 픽스처를 쓰는 테스트를 깨서(리뷰에서 확인) 캐시를 버리는 공간으로 옮긴다.
 - 가용성: `DEEPAGENTS_CODE_PLAN_SANDBOX`가 `0`이나 `false`가 아니고, linux x86_64이고, 런처로 `true`를 돌린 탐침이 0이면 쓴다. 탐침은 프로세스당 한 번이다. 못 쓰면 F1~F6 정적 판정 그대로다. 실행 중 125는 정적 판정으로 다시 보내지 않는다(쓰기는 없고 출력이 이유를 말한다).
 - 보이는 것: 모델, 승인 화면, auto 분류기, 체크포인트는 원래 명령을 본다. 게이트 안쪽의 `ServerHooksMiddleware`(PreToolUse 훅)와 실행은 감싼 명령을 본다. 결과는 업스트림 `execute` 그대로(`status="success"`, 출력과 `Exit code`)라 쓰기 실패는 "Read-only file system"과 0이 아닌 종료 코드로 보이고 거부(`gate_denies`)로 세지 않는다.
 
@@ -1891,6 +1893,13 @@ def evaluate(question: str, cases: Sequence[Case], decider: Decider) -> Calibrat
 
 **절차.** `dev`로 문구와 임계값을 고친다. 고칠 때마다 `dev` 결과를 본다. 끝나면 `holdout`을 한 번 돌려 README에 적는다. `holdout` 결과를 보고 문구를 다시 고치지 않는다.
 
+[M9] 구현에서 정한 것 (DECISIONS O40~O44).
+- 질문 문구는 `decider.py`의 상수 `J1`~`J5`와 `noul_j6()`다. 평가는 게이트와 같은 질문 객체를 쓰고, 사례의 `state`도 게이트의 `question_j*` 함수로 만든다. 생성 모델은 계획 필드(요구사항, 범위, targets, 순서, 완료 조건, 테스트 명령, J4는 호출 요약과 새 요청)를 JSON으로 낸다.
+- J6 사례에는 `record: {name, description}`이 더 있다. 기억의 이름과 설명이 질문 문구에 들어가기 때문이다.
+- 생성 모델: dcode 모델 설정(`glm-5.3-flash` 166건, `glm-5.3-flash-ultrafast` 74건). Sonnet급은 이 환경 설정에 없다. 생성은 실패한 사례를 빼고 쓰고, 다시 실행하면 빠진 id만 만든다.
+- `CalibrationReport`에 `failed`(판정 불가, 0으로 셈), `block_recall`(정답 0 중 막은 비율), `outcomes`(사례별 확률)를 더했다. `--sweep`은 저장한 확률로 임계값 0.1~0.9를 다시 센다(Jev를 다시 부르지 않음).
+- 결과(2026-11-13): dev 처음 140/144(J1·J2·J4 FP 각 1, J6 FN 1). J1, J2, J4, J6 문구를 한 번 고친 뒤 dev 144/144. 임계값 0.5 유지. holdout 95/96(J3 FP 1, J3-026). 판정 불가 0. 비용 Jev 약 450회 $0.023.
+
 질문별로 무엇이 더 나쁜 오류인지가 다르다.
 
 | 질문 | 더 나쁜 오류 | 이유 |
@@ -2065,6 +2074,8 @@ M3에서 미룬 것: `_cg_counters`와 `aafter_agent`는 소비자인 `tracing.p
 
 검사: `holdout` 결과가 README에 있다. README의 테스트 케이스를 처음부터 끝까지 한 번 따라 한다.
 
+[M9] README는 저장소 루트. 실제 모델 케이스는 T3, T7만(O39). 설치는 `uv export --frozen`으로 lock 버전(O45). 깨끗한 사본을 `/tmp`에 설치하면 샌드박스가 `/tmp`를 덮어 설치가 가려지던 것을 고쳤다(O46, 3.7 런처 항목과 14장).
+
 ## 11. README 테스트 케이스
 
 채점자가 따라 할 순서다. 각 항목에 명령, 기대하는 결과, 대응하는 평가 항목을 적는다. 실제 모델을 부르는 항목에는 예상 규모를 적는다. 규모는 M9에서 재서 채운다.
@@ -2081,6 +2092,8 @@ M3에서 미룬 것: `_cg_counters`와 `aafter_agent`는 소비자인 `tracing.p
 | T7 | Memory | T3 뒤 TUI를 닫고 다시 열어 관련 요청. `.deepagents/memory/`의 작업 기록, 새 계획의 "참고한 Memory" 절 | 3-1, 3-2 |
 | T8 | 자기 개선 | 함정 과제를 두 번 수행, `/improve`, 평가 실행기, `/improve apply` | 3-3, 3-4 |
 | T9 | 모니터링 | `/runs`, `/runs <id>`, `/trace` | 4-1 ~ 4-4 |
+
+[M9] 실제 README(저장소 루트)의 형태. T0은 `bash scripts/check.sh lint`, `unit`(BASELINE.md: `make`가 이 사본에서 안 돈다). T2는 가짜 모델 테스트 `test_t2_question_is_answered_without_plan`, T4는 `-k "g1_ or g2_ or g11_"`, T5는 `-k "g6_ or g7_ or g19_"`, T6은 `-k "g18_ or g9_ or g10_"`. 실제 모델로는 T3, T7만 한 번씩 돌렸다(사용자 결정 O39). T8은 모델 없는 부분(단위 테스트, `evalsuite verify`, 시드한 개선안의 `/improve list/show/apply`)만 확인했고, 실제 모델 경로는 다음 자기 개선 작업(`docs/design/self_improvement_v2.md`)으로 미뤘다.
 
 T4와 T5는 가짜 모델 테스트다. 모델을 유도하지 않으므로 매번 같은 결과가 나온다. T3에서 같은 동작을 실제 모델로도 볼 수 있다.
 
@@ -2146,6 +2159,8 @@ README에 함께 적는 것. 필요한 키와 없을 때의 동작, 게이트 �
 - [M6] 추적이 켜진 실행에서는 `cg.memory.inject`에 상한으로 뺀 기억을 적으려고 요청 시작 때 주입 글을 한 번 더 만든다. 추적이 꺼져 있으면 만들지 않는다.
 - [M6] 서브에이전트 안의 도구 호출은 카운터에 들어가지 않는다. 승인 화면에서 멈춘 실행에는 `after_agent`가 돌지 않아 점수가 없다.
 - [F1] ([F7] 뒤로는 샌드박스를 못 쓸 때와 승인 뒤의 J4 없는 통과에만 해당한다) 승인 전 `execute`의 읽기 전용 판정은 명령 이름 허용 목록이다. `cat`, `head`, `ls`는 프로젝트 밖 파일도 읽는다(전부터 그랬다). `cd`는 맨 앞의 절대 경로 하나만(그 뒤의 git은 루트로 갈 때만), `2>&1`과 `2>/dev/null` 밖의 리다이렉트는 받지 않는다. `(cd x && ls)`처럼 괄호로 묶은 명령, `printf`, `sed -n`, `rg`는 여전히 거부된다. [F5] `>/dev/null`, `1>/dev/null`(같이 쓰는 `2>&1` 포함. `&>/dev/null`은 sh에서 백그라운드라 거부), 루트로 가는 `git -C <절대 경로>`, 위험한 식이 없는 `find`를 더 받는다. find는 역슬래시(`\(`), `{`, `$`, 따옴표 밖 glob이 있으면 거부되고 `find`도 `cat`처럼 프로젝트 밖을 읽는다. git은 `{`, `$`가 있으면 거부된다(`HEAD@{1}` 포함).
+- [M9] dcode 설치(가상환경)가 `/tmp` 아래면 프로젝트 위치와 관계없이 `/tmp`는 읽기 전용이고 임시 공간은 `/run/tmp`다(`sandbox.scratch_dir`).
+- [M9] 실제 모델로 끝까지 돌린 README 케이스는 T3, T7 한 번씩이다. 자기 개선(T8)의 실제 모델 경로(함정 과제 → `/improve` → `evalsuite run --improvement` → `/improve apply`)는 돌린 적이 없다. M8에서 함정 과제가 7.2 임계값을 넘는 신호를 만들지 못했다.
 - [F7] 계획 전 샌드박스는 쓰기와 네트워크만 막는다. 비밀 파일(`~/.ssh`, `.env`)은 읽히고 그 내용이 모델 컨텍스트로 들어간다(보호 폴더 문자열 검사는 쓰기 명령에만 남았다). [F7 리뷰] 같은 uid 프로세스는 PID 네임스페이스로 가려졌다. 장치 파일은 읽기 전용 마운트로 막히지 않는다(`/dev/dxg` GPU는 열린다. 다른 터미널 `/dev/pts`는 가렸다). 프로젝트 `.env`가 `DEEPAGENTS_CODE_PLAN_SANDBOX=0`을 넣으면 정적 판정으로 내려간다(dotenv 거부 목록에 없다. `DEEPAGENTS_CODE_PLAN_GATE`도 같다). seccomp는 x86_64 전용이라 다른 아키텍처에서는 정적 판정으로 넘어간다. WSL2(커널 6.6)에서만 확인했고, AppArmor가 비특권 user 네임스페이스를 막는 일반 Ubuntu(23.10+)에서는 탐침이 실패해 정적 판정으로 넘어갈 것으로 본다(확인 못 함). 프로젝트가 `/tmp` 아래면 `/tmp`는 읽기 전용이고 임시 공간은 `/run/tmp`(TMPDIR)다. `/tmp`를 직접 쓰는 도구는 실패한다. 프로젝트가 `/run` 아래면 가려져 설정이 실패한다(125). 승인 뒤 `execute`와 승인 전에도 PreToolUse 훅이 명령을 고치는 경우는 샌드박스 밖이다. 포크 폭탄과 긴 실행은 기존 timeout만 막는다.
 - [F2] auto 모드(`AutoModeHITLMiddleware`)는 게이트보다 먼저 판단한다. 분류기는 주 모델 응답을 감싸는 `awrap_model_call`에서, 승인 맵에 든 도구(`execute` 등) 중 결정적 허용(`_fixed_repo_command_allowed`, 설정한 좁은 셸 허용 목록) 밖의 호출을 모두 검토한다. 게이트는 그 뒤 도구 실행 때(`awrap_tool_call`) 판단한다. 그래서 게이트가 어차피 거부할 호출도 분류기를 거치고, 분류기가 거부하면(시간 초과 포함) 그 메시지(`Auto denied [...]`)가 게이트의 안내 문장 대신 모델에 간다. 분류기는 `_SHELL_CONTROL_RE`로 조합 명령을 결정적 허용에서 빼므로 F1에서 넓힌 읽기 명령도 분류기를 거친다. 게이트의 허용을 분류기의 허용으로 넘기지 않는다(우리 판정기가 분류기 우회로가 된다). 안전은 둘이 따로 막으므로 줄지 않는다. 비용과 지연, 메시지가 달라질 뿐이다.
 - [F2] 분류기 시간 제한은 기본 20초(`config_manifest.AUTO_CLASSIFIER_TIMEOUT_SECONDS_DEFAULT`)이고, 재시도 대기도 이 안에 든다. 분류기 모델은 지정하지 않으면 주 모델이다. 바꾸는 법: `DEEPAGENTS_CODE_AUTO_CLASSIFIER_TIMEOUT`이나 `config.toml` `[models].auto_classifier_timeout`(1~300초, 다음 시작부터), `DEEPAGENTS_CODE_AUTO_CLASSIFIER_MODEL`이나 `[models].auto_classifier`나 `--auto-classifier-model`(더 빠른 별도 모델). 프로젝트 `.env`로는 둘 다 정할 수 없다. 시간 초과는 그 호출을 거부하고(실행하지 않음), 연속 2번 뒤의 검토부터는 사람 승인으로 넘어간다(`_CONSECUTIVE_UNAVAILABLE_FALLBACK`). 실사용에서 본 20초 초과는 재현하지 못했다. 같은 모델 `glm-5.3-flash-ultrafast`로 체크포인트에 남은 분류기 요청 다섯 개(성공한 것들. 시간 초과 난 요청은 판정 뒤에만 저장돼 남지 않는다)를 세 번씩 0.7~4.9초, 시간 초과 난 호출을 직전 기록과 앞선 호출로 재구성한 요청은 여섯 번 3.5~7.9초(모두 거부 판정)였다. 재구성이고 새로 만든 모델 객체라 실행 당시의 모델 설정과는 다를 수 있다.

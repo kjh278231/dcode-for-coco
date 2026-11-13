@@ -190,10 +190,18 @@ def scratch_dir(cwd: str) -> str:
         cwd: 명령의 작업 폴더.
 
     Returns:
-        cwd가 `/tmp`이거나 그 아래면 `/run/tmp`, 아니면 `/tmp`.
+        cwd나 이 파이썬(dcode 설치)이 `/tmp` 아래면 `/run/tmp`, 아니면 `/tmp`.
+        `/tmp`에 tmpfs를 덮으면 그 아래 프로젝트와 설치가 가려진다.
     """
-    real = os.path.realpath(cwd)
-    return "/run/tmp" if real == _TMP or real.startswith(_TMP + "/") else _TMP
+
+    def under_tmp(path: str) -> bool:
+        # 가상환경 파이썬은 /tmp 밖으로 가는 링크라 링크를 풀기 전후를 다 본다
+        return any(
+            p == _TMP or p.startswith(_TMP + "/")
+            for p in (os.path.realpath(path), os.path.normpath(path))
+        )
+
+    return "/run/tmp" if under_tmp(cwd) or under_tmp(sys.executable) else _TMP
 
 
 def _setup(cwd: str) -> str:

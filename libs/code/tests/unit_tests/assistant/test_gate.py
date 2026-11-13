@@ -257,6 +257,15 @@ async def test_f5_observed_read_only_shell_runs_in_real_shell(tmp_path: Path) ->
     assert not (tmp_path / "pw").exists()
 
 
+async def test_t2_question_is_answered_without_plan(tmp_path: Path) -> None:
+    """README T2: J5가 변경 불필요로 보면 탐색 결과에 그 안내가 붙고 계획은 없다."""
+    h = Harness(tmp_path, [explore(), done()], decider=FakeDecider({"J5": 0.1}))
+    result = await h.say("app.py의 add가 어떻게 동작하는지 설명해 줘")
+    assert "코드 변경이 필요 없어 보인다" in str(tool_result(result, "t").content)
+    assert not (tmp_path / ".deepagents" / "plans").exists()
+    assert (await h.state()).get(PHASE_KEY, "idle") == "idle"
+
+
 async def test_g4_submit_without_exploring_is_denied(tmp_path: Path) -> None:
     h = Harness(tmp_path, [submit(), done()])
     result = await h.say("app.py 버그 고쳐줘")

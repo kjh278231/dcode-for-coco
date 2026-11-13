@@ -1,0 +1,674 @@
+[
+  {
+    "question": "J1",
+    "split": "holdout",
+    "n": 16,
+    "true_positive": 8,
+    "false_positive": 0,
+    "true_negative": 8,
+    "false_negative": 0,
+    "threshold": 0.5,
+    "failed": 0,
+    "outcomes": [
+      {
+        "id": "J1-025",
+        "label": 1,
+        "probability": 0.95,
+        "reason": "ok"
+      },
+      {
+        "id": "J1-026",
+        "label": 0,
+        "probability": 0.07,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J1-027",
+        "label": 1,
+        "probability": 0.95,
+        "reason": "ok"
+      },
+      {
+        "id": "J1-028",
+        "label": 0,
+        "probability": 0.1,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J1-029",
+        "label": 1,
+        "probability": 0.96,
+        "reason": "ok"
+      },
+      {
+        "id": "J1-030",
+        "label": 0,
+        "probability": 0.12,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J1-031",
+        "label": 1,
+        "probability": 0.96,
+        "reason": "ok"
+      },
+      {
+        "id": "J1-032",
+        "label": 0,
+        "probability": 0.16,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J1-033",
+        "label": 1,
+        "probability": 0.95,
+        "reason": "ok"
+      },
+      {
+        "id": "J1-034",
+        "label": 0,
+        "probability": 0.08,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J1-035",
+        "label": 1,
+        "probability": 0.96,
+        "reason": "ok"
+      },
+      {
+        "id": "J1-036",
+        "label": 0,
+        "probability": 0.13,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J1-037",
+        "label": 1,
+        "probability": 0.96,
+        "reason": "ok"
+      },
+      {
+        "id": "J1-038",
+        "label": 0,
+        "probability": 0.12,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J1-039",
+        "label": 1,
+        "probability": 0.95,
+        "reason": "ok"
+      },
+      {
+        "id": "J1-040",
+        "label": 0,
+        "probability": 0.14,
+        "reason": "below_threshold"
+      }
+    ],
+    "precision": 1.0,
+    "recall": 1.0,
+    "block_recall": 1.0
+  },
+  {
+    "question": "J2",
+    "split": "holdout",
+    "n": 16,
+    "true_positive": 8,
+    "false_positive": 0,
+    "true_negative": 8,
+    "false_negative": 0,
+    "threshold": 0.5,
+    "failed": 0,
+    "outcomes": [
+      {
+        "id": "J2-025",
+        "label": 1,
+        "probability": 0.92,
+        "reason": "ok"
+      },
+      {
+        "id": "J2-026",
+        "label": 0,
+        "probability": 0.15,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J2-027",
+        "label": 1,
+        "probability": 0.94,
+        "reason": "ok"
+      },
+      {
+        "id": "J2-028",
+        "label": 0,
+        "probability": 0.04,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J2-029",
+        "label": 1,
+        "probability": 0.95,
+        "reason": "ok"
+      },
+      {
+        "id": "J2-030",
+        "label": 0,
+        "probability": 0.13,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J2-031",
+        "label": 1,
+        "probability": 0.94,
+        "reason": "ok"
+      },
+      {
+        "id": "J2-032",
+        "label": 0,
+        "probability": 0.12,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J2-033",
+        "label": 1,
+        "probability": 0.93,
+        "reason": "ok"
+      },
+      {
+        "id": "J2-034",
+        "label": 0,
+        "probability": 0.04,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J2-035",
+        "label": 1,
+        "probability": 0.91,
+        "reason": "ok"
+      },
+      {
+        "id": "J2-036",
+        "label": 0,
+        "probability": 0.13,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J2-037",
+        "label": 1,
+        "probability": 0.93,
+        "reason": "ok"
+      },
+      {
+        "id": "J2-038",
+        "label": 0,
+        "probability": 0.03,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J2-039",
+        "label": 1,
+        "probability": 0.88,
+        "reason": "ok"
+      },
+      {
+        "id": "J2-040",
+        "label": 0,
+        "probability": 0.17,
+        "reason": "below_threshold"
+      }
+    ],
+    "precision": 1.0,
+    "recall": 1.0,
+    "block_recall": 1.0
+  },
+  {
+    "question": "J3",
+    "split": "holdout",
+    "n": 16,
+    "true_positive": 8,
+    "false_positive": 1,
+    "true_negative": 7,
+    "false_negative": 0,
+    "threshold": 0.5,
+    "failed": 0,
+    "outcomes": [
+      {
+        "id": "J3-025",
+        "label": 1,
+        "probability": 0.96,
+        "reason": "ok"
+      },
+      {
+        "id": "J3-026",
+        "label": 0,
+        "probability": 0.78,
+        "reason": "ok"
+      },
+      {
+        "id": "J3-027",
+        "label": 1,
+        "probability": 0.96,
+        "reason": "ok"
+      },
+      {
+        "id": "J3-028",
+        "label": 0,
+        "probability": 0.22,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J3-029",
+        "label": 1,
+        "probability": 0.75,
+        "reason": "ok"
+      },
+      {
+        "id": "J3-030",
+        "label": 0,
+        "probability": 0.19,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J3-031",
+        "label": 1,
+        "probability": 0.96,
+        "reason": "ok"
+      },
+      {
+        "id": "J3-032",
+        "label": 0,
+        "probability": 0.17,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J3-033",
+        "label": 1,
+        "probability": 0.93,
+        "reason": "ok"
+      },
+      {
+        "id": "J3-034",
+        "label": 0,
+        "probability": 0.38,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J3-035",
+        "label": 1,
+        "probability": 0.95,
+        "reason": "ok"
+      },
+      {
+        "id": "J3-036",
+        "label": 0,
+        "probability": 0.1,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J3-037",
+        "label": 1,
+        "probability": 0.96,
+        "reason": "ok"
+      },
+      {
+        "id": "J3-038",
+        "label": 0,
+        "probability": 0.31,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J3-039",
+        "label": 1,
+        "probability": 0.81,
+        "reason": "ok"
+      },
+      {
+        "id": "J3-040",
+        "label": 0,
+        "probability": 0.26,
+        "reason": "below_threshold"
+      }
+    ],
+    "precision": 0.8888888888888888,
+    "recall": 1.0,
+    "block_recall": 0.875
+  },
+  {
+    "question": "J4",
+    "split": "holdout",
+    "n": 16,
+    "true_positive": 8,
+    "false_positive": 0,
+    "true_negative": 8,
+    "false_negative": 0,
+    "threshold": 0.5,
+    "failed": 0,
+    "outcomes": [
+      {
+        "id": "J4-025",
+        "label": 1,
+        "probability": 0.95,
+        "reason": "ok"
+      },
+      {
+        "id": "J4-026",
+        "label": 0,
+        "probability": 0.04,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J4-027",
+        "label": 1,
+        "probability": 0.95,
+        "reason": "ok"
+      },
+      {
+        "id": "J4-028",
+        "label": 0,
+        "probability": 0.1,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J4-029",
+        "label": 1,
+        "probability": 0.93,
+        "reason": "ok"
+      },
+      {
+        "id": "J4-030",
+        "label": 0,
+        "probability": 0.16,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J4-031",
+        "label": 1,
+        "probability": 0.94,
+        "reason": "ok"
+      },
+      {
+        "id": "J4-032",
+        "label": 0,
+        "probability": 0.32,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J4-033",
+        "label": 1,
+        "probability": 0.9,
+        "reason": "ok"
+      },
+      {
+        "id": "J4-034",
+        "label": 0,
+        "probability": 0.24,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J4-035",
+        "label": 1,
+        "probability": 0.8,
+        "reason": "ok"
+      },
+      {
+        "id": "J4-036",
+        "label": 0,
+        "probability": 0.04,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J4-037",
+        "label": 1,
+        "probability": 0.95,
+        "reason": "ok"
+      },
+      {
+        "id": "J4-038",
+        "label": 0,
+        "probability": 0.08,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J4-039",
+        "label": 1,
+        "probability": 0.95,
+        "reason": "ok"
+      },
+      {
+        "id": "J4-040",
+        "label": 0,
+        "probability": 0.29,
+        "reason": "below_threshold"
+      }
+    ],
+    "precision": 1.0,
+    "recall": 1.0,
+    "block_recall": 1.0
+  },
+  {
+    "question": "J5",
+    "split": "holdout",
+    "n": 16,
+    "true_positive": 8,
+    "false_positive": 0,
+    "true_negative": 8,
+    "false_negative": 0,
+    "threshold": 0.5,
+    "failed": 0,
+    "outcomes": [
+      {
+        "id": "J5-025",
+        "label": 1,
+        "probability": 0.96,
+        "reason": "ok"
+      },
+      {
+        "id": "J5-026",
+        "label": 0,
+        "probability": 0.05,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J5-027",
+        "label": 1,
+        "probability": 0.97,
+        "reason": "ok"
+      },
+      {
+        "id": "J5-028",
+        "label": 0,
+        "probability": 0.05,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J5-029",
+        "label": 1,
+        "probability": 0.97,
+        "reason": "ok"
+      },
+      {
+        "id": "J5-030",
+        "label": 0,
+        "probability": 0.05,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J5-031",
+        "label": 1,
+        "probability": 0.98,
+        "reason": "ok"
+      },
+      {
+        "id": "J5-032",
+        "label": 0,
+        "probability": 0.04,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J5-033",
+        "label": 1,
+        "probability": 0.98,
+        "reason": "ok"
+      },
+      {
+        "id": "J5-034",
+        "label": 0,
+        "probability": 0.04,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J5-035",
+        "label": 1,
+        "probability": 0.97,
+        "reason": "ok"
+      },
+      {
+        "id": "J5-036",
+        "label": 0,
+        "probability": 0.06,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J5-037",
+        "label": 1,
+        "probability": 0.97,
+        "reason": "ok"
+      },
+      {
+        "id": "J5-038",
+        "label": 0,
+        "probability": 0.05,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J5-039",
+        "label": 1,
+        "probability": 0.96,
+        "reason": "ok"
+      },
+      {
+        "id": "J5-040",
+        "label": 0,
+        "probability": 0.05,
+        "reason": "below_threshold"
+      }
+    ],
+    "precision": 1.0,
+    "recall": 1.0,
+    "block_recall": 1.0
+  },
+  {
+    "question": "J6",
+    "split": "holdout",
+    "n": 16,
+    "true_positive": 8,
+    "false_positive": 0,
+    "true_negative": 8,
+    "false_negative": 0,
+    "threshold": 0.5,
+    "failed": 0,
+    "outcomes": [
+      {
+        "id": "J6-025",
+        "label": 1,
+        "probability": 0.97,
+        "reason": "ok"
+      },
+      {
+        "id": "J6-026",
+        "label": 0,
+        "probability": 0.02,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J6-027",
+        "label": 1,
+        "probability": 0.88,
+        "reason": "ok"
+      },
+      {
+        "id": "J6-028",
+        "label": 0,
+        "probability": 0.02,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J6-029",
+        "label": 1,
+        "probability": 0.93,
+        "reason": "ok"
+      },
+      {
+        "id": "J6-030",
+        "label": 0,
+        "probability": 0.02,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J6-031",
+        "label": 1,
+        "probability": 0.71,
+        "reason": "ok"
+      },
+      {
+        "id": "J6-032",
+        "label": 0,
+        "probability": 0.02,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J6-033",
+        "label": 1,
+        "probability": 0.86,
+        "reason": "ok"
+      },
+      {
+        "id": "J6-034",
+        "label": 0,
+        "probability": 0.04,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J6-035",
+        "label": 1,
+        "probability": 0.95,
+        "reason": "ok"
+      },
+      {
+        "id": "J6-036",
+        "label": 0,
+        "probability": 0.04,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J6-037",
+        "label": 1,
+        "probability": 0.74,
+        "reason": "ok"
+      },
+      {
+        "id": "J6-038",
+        "label": 0,
+        "probability": 0.02,
+        "reason": "below_threshold"
+      },
+      {
+        "id": "J6-039",
+        "label": 1,
+        "probability": 0.92,
+        "reason": "ok"
+      },
+      {
+        "id": "J6-040",
+        "label": 0,
+        "probability": 0.05,
+        "reason": "below_threshold"
+      }
+    ],
+    "precision": 1.0,
+    "recall": 1.0,
+    "block_recall": 1.0
+  }
+]
