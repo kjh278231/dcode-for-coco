@@ -138,6 +138,30 @@ def _inside(path: Path, root: Path) -> None:
         raise PermissionError(msg)
 
 
+def install(
+    improvement: Improvement, memory: MemoryStore, skills_dir: Path, root: Path
+) -> None:
+    """개선안의 payload를 기억이나 스킬 폴더에 넣는다. 상태는 보지 않는다.
+
+    `apply`와 평가 실행기(candidate 저장소)가 함께 쓴다.
+
+    Args:
+        improvement: 넣을 개선안.
+        memory: 규칙을 저장할 기억 저장소.
+        skills_dir: 스킬을 복사할 폴더.
+        root: 쓰기가 벗어나면 안 되는 프로젝트 루트.
+    """
+    if improvement.kind == "rule":
+        meta, body = frontmatter.parse(improvement.payload.read_text(encoding="utf-8"))
+        fields = {k: str(meta[k]) for k in _MEMORY_FIELDS}
+        memory.save(MemoryRecord(body=body, **fields))  # type: ignore[arg-type]
+    else:
+        _inside(skills_dir, root)
+        shutil.copytree(
+            improvement.payload, skills_dir / improvement.name, dirs_exist_ok=True
+        )
+
+
 class ImprovementStore:
     """개선안 폴더의 읽기와 쓰기."""
 
@@ -315,17 +339,7 @@ class ImprovementStore:
         if improvement.status != "validated":
             msg = f"검증을 통과한 개선안만 반영한다. 지금 상태: {improvement.status}"
             raise ImprovementStateError(msg)
-        if improvement.kind == "rule":
-            meta, body = frontmatter.parse(
-                improvement.payload.read_text(encoding="utf-8")
-            )
-            fields = {k: str(meta[k]) for k in _MEMORY_FIELDS}
-            memory.save(MemoryRecord(body=body, **fields))  # type: ignore[arg-type]
-        else:
-            _inside(skills_dir, self.project_root)
-            shutil.copytree(
-                improvement.payload, skills_dir / improvement.name, dirs_exist_ok=True
-            )
+        install(improvement, memory, skills_dir, self.project_root)
         self._set_status(improvement_id, "applied")
 
     def reject(self, improvement_id: str) -> None:

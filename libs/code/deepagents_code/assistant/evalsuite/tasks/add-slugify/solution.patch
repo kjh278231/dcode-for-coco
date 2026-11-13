@@ -1,0 +1,16 @@
+--- a/textutil/strings.py
++++ b/textutil/strings.py
+@@ -1,6 +1,13 @@
+ """문자열 정리 함수."""
+ 
++import re
++
+ 
+ def normalize_spaces(text: str) -> str:
+     """연속한 공백을 하나로 줄이고 앞뒤 공백을 없앤다."""
+     return " ".join(text.split())
++
++
++def slugify(text: str) -> str:
++    """URL에 쓸 수 있는 짧은 이름으로 바꾼다."""
++    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")

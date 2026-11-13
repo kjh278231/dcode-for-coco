@@ -1704,7 +1704,19 @@ def run_trial(task: Task, variant: str, trial: int, *, improvement: Improvement 
 
 [확정] 비대화 실행은 계획과 질문을 출력하고 끝나며, 답은 다시 호출해서 준다. 평가 실행기가 그 "서비스" 역할을 한다.
 
-[미확인] `dcode -n`의 출력에서 thread id를 얻는 방법. M8에서 `DC/client/non_interactive.py`의 출력 형식을 확인한다. `--output-format json` 같은 기계용 출력이 있으면 그것을 쓴다.
+[확인, M8] (원래 [미확인]) `dcode -n`의 출력에서 thread id를 얻는 방법. M8에서 `DC/client/non_interactive.py`의 출력 형식을 확인한다. `--output-format json` 같은 기계용 출력이 있으면 그것을 쓴다.
+
+[M8] 확인 결과. `-n`에는 기계용 출력이 없다(`--json`은 하위 명령 전용). 헤더 줄 `Thread: <uuid7>`(`_build_non_interactive_header`, `--quiet`이면 안 나옴)에서 정규식으로 읽는다. Rich가 줄을 바꿔 `Thread:` 앞에서 갈리므로 공백·줄바꿈을 허용하고 `COLUMNS=400`을 준다. 승인은 `dcode -r <thread> -n "승인"`으로 실제 실행에서 G14대로 `executing` → `complete_plan` → 계획 `done`이 됐다.
+
+[M8] 구현에서 정한 것.
+- 셸: `-n`은 `-S`가 없으면 셸이 꺼지고 백엔드가 `FilesystemBackend`라서 `complete_plan`이 `test_command`를 못 돈다. 실행기는 `-S recommended,python3`을 준다.
+- 과제 테스트는 표준 라이브러리 `unittest`다. 에이전트 셸의 PATH에는 `python3`만 있고 pytest가 없다. 채점은 실행기의 `sys.executable -I -B -c <unittest.main 호출> <파일들>`이다. 테스트 폴더의 최상위 항목(`tests/`)을 지우고 원본을 복사한 뒤 돌리고, 환경은 `PATH`만 넘긴다(에이전트가 둔 `tests/__init__.py`나 `unittest/`가 채점을 바꾸지 못하게). dcode가 시간을 넘기면 SIGTERM부터 보낸다(바로 SIGKILL이면 dcode가 띄운 서버가 남는다). 실행 전후로 과제 폴더의 테스트 파일 해시가 다르면 테스트를 돌리지 않고 실패로 기록한다(승인 뒤 프로젝트 밖 쓰기는 J4에만 기대므로). `tests_regression/`은 시작 저장소에도 넣는다(작업 저장소 = `repo/` + `tests_regression/`). `task.toml`에 `answers`(미결 질문의 답 목록)를 둔다. 과제 코드는 `tasks/ruff.toml`로 기본 규칙(E, F, W, I)만 건다.
+- 승인 왕복은 모델 출력 문장이 아니라 작업 저장소의 가장 최근 계획 파일로 정한다. `reviewed`이고 미결 질문이 없으면 "승인", 있으면 `answers`의 다음 답(없으면 실패), 그 밖의 상태나 계획 없음이면 끝. dcode 호출은 상한 5회. 에이전트가 회귀 테스트 파일을 바꿨는지(`tests_untouched`)는 기록만 하고 채점은 원본으로 덮어써서 한다.
+- 신호: trace id는 `thread_id:turn_id`로 만들어져 실행기가 알 수 없다. `wait_for(trace_id)` 대신 `list_runs(session_id=thread_id)`로 dcode 호출 수만큼 trace가 보이고 모두 점수가 붙을 때까지 기다린다(점수는 끝나고 1분 가까이 늦게 보였다. 5초 x 24회). 신호는 그 trace들의 점수 합이다(`cg.review_rounds`는 계획의 누적 회차라 최댓값). 끝내 다 보이지 않으면 일부로 계산하지 않고 빈 사전이다.
+- candidate의 개선안은 `improve.install`(`apply`에서 뺀 함수)로 작업 저장소의 기억이나 스킬 폴더에 넣는다. 개선안 상태는 바꾸지 않는다.
+- `TrialResult`에 `thread_id`, `calls`, `elapsed_s`를 더했다. dcode 출력은 `<작업 폴더>.log`, 결과는 `results.json`에 남는다. 작업 폴더는 지우지 않는다.
+- 판정: A는 목표와 회귀 테스트 통과만 본다. B의 "통과하던 과제"는 baseline 반복이 모두 통과한 과제다. C가 판정 가능하고 "나빠짐"이면 떨어진다(P8). C는 `cg.*` 가운데 7.2 임계값 신호(클수록 나쁨)만 비교한다. `limits`의 과제 수와 반복 수는 실제 값으로 적는다. `--baseline-only`는 `judge`와 `record_validation`을 부르지 않는다. `--improvement`는 `proposed`인 개선안만 받는다(검증 기록을 덮어쓰지 않는다).
+- Jev 키는 실행기를 띄운 환경에서 dcode로 그대로 넘어간다. 작업 저장소는 임시 폴더라 프로젝트 `.env`가 없다. 키는 셸 환경이나 `~/.deepagents/.env`에 있어야 한다.
 
 **통과 기준.** [제안]
 
@@ -1955,6 +1967,8 @@ M3에서 미룬 것: `_cg_counters`와 `aafter_agent`는 소비자인 `tracing.p
 `evalsuite/`, 과제 셋.
 
 검사: `python -m ...evalsuite verify` 통과. `test_evalsuite.py`의 `judge` 테스트 통과. `--baseline-only --trials 1` 한 번 실행.
+
+[M8] 확인 결과로 바꾼 것: thread id는 비대화 헤더에서 읽는다. 실행기는 `-S recommended,python3`을 준다. 과제 테스트는 `unittest`다. 신호는 세션(thread)의 trace 점수 합이다. C가 "나빠짐"이면 떨어진다(7.5).
 
 ### M9. 보정과 README
 

@@ -1,0 +1,6 @@
+name = "add-slugify"
+instruction_file = "instruction.md"
+test_target = "tests_target"
+test_regression = "tests_regression"
+timeout_s = 900
+answers = ["요청문에 적힌 대로 진행해 주세요. 그 밖의 선택은 가장 단순한 쪽으로 정해 주세요."]

@@ -250,4 +250,44 @@
 - 확인 못 한 것: 실제 모델로 `/improve` → `propose_improvement`(임계값을 넘은 관찰이 없어서 지시문이 나가지 않았다. 가짜 모델 그래프 테스트와 pilot 테스트로만 확인). 시작 알림이 실제로 뜨는 화면(관찰 0건이라 안 뜸). `/trace`가 브라우저를 여는 실제 동작(새 대화라 trace 없음). `/improve apply`의 실제 TUI 실행. `ty`.
 - 참고: 전역 `dcode`(`~/.local/bin/dcode`)는 지금 `~/workspace/deepagents/libs/code`를 가리킨다. 이 사본은 `libs/code/.venv/bin/dcode`로 띄웠다. Langfuse 키는 셸이 아니라 `~/.claude/settings.json`의 `env`에서 온다(이 에이전트 프로세스에만 있다). 사용자의 보통 터미널에는 없다. 단위 테스트도 이 환경에서는 실제 Langfuse에 닿았다(`--disable-socket`인데 관측 조회가 성공한 뒤 점수 조회에서 재시도 중이었다). M8에서 주의.
 
-## M8. 평가 실행기와 과제 — 다음
+## M8. 평가 실행기와 과제 — 완료 (2026-11-13)
+
+- 추가: `deepagents_code/assistant/evalsuite/{__init__,suite,__main__}.py`(`Task`, `load_task(s)`, `prepare_repo`, `run_tests`, `verify_task`, `TrialResult`, `latest_plan`, `next_reply`, `read_signals`, `run_trial`, `run_suite`, `judge`, 명령 `verify`·`run`), 과제 셋 `evalsuite/tasks/{fix-median,add-slugify,trap-test-command}/`(task.toml, instruction.md, repo/, tests_target/, tests_regression/, solution.patch), `tasks/ruff.toml`, `tests/unit_tests/assistant/test_evalsuite.py`(20).
+- 수정(assistant): `improve.py`에서 payload 반영 부분을 `install()`로 뺐다(`apply`와 실행기의 candidate가 함께 쓴다). 업스트림 파일은 고치지 않았다(그래서 baseline은 돌리지 않았다).
+- 과제: 버그 수정(`median` 짝수 개), 함수 추가(`slugify`), 함정(`clamp` 상한 버그 + 저장소 `AGENTS.md`의 테스트 명령 `-p "*_test.py"`가 실제 파일 `test_*.py`와 맞지 않아 0개 실행, 종료 코드 5). 테스트는 `unittest`.
+- 먼저 확인한 [미확인] (SPEC 7.5):
+  - thread id: `-n`에는 기계용 출력이 없다(`--json`은 하위 명령용 `add_json_output_arg`). 비대화 헤더 `Thread: <uuid7>`에서 읽는다. 실제 출력에서 Rich가 `Thread:` 앞에서 줄을 바꿨다. 정규식이 공백·줄바꿈을 허용하고 `COLUMNS=400`을 준다. `--quiet`이면 헤더가 없어 쓰지 않는다.
+  - 비대화 승인: 손으로 `dcode -n <fix-median 요청>` → 계획 `reviewed`(64초), `dcode -r <thread> -n "승인"` → `executing`, `edit_file`, `complete_plan` 통과, 계획 `done`, 작업 기록 저장(12초). 게이트 코드(`_answer_headless`)와 같다. 미결 질문이 남아 있으면 "승인"도 답으로 처리되므로 실행기는 계획 파일의 질문을 먼저 본다.
+  - 같이 드러난 것: `-S` 없이는 셸이 꺼져 `complete_plan`이 테스트를 못 돈다(O13). 임시 저장소에서는 Jev 키를 못 찾았다(O15). 두 번째 요청의 점수는 끝나고 약 50초 뒤 조회됐다(O12).
+- 검사:
+  - `python -m deepagents_code.assistant.evalsuite verify`: 세 과제 모두 통과(1.3초). 시작 상태 회귀 통과, 목표 실패, 해법 적용 뒤 둘 다 통과.
+  - `check.sh unit` 254 passed(새 21: `judge`의 A·B·C 갈래, 잡음 폭 안/밖, 반복 1회, 신호 빠짐, candidate 없음, 회귀 실패, 과제 읽기와 검사·문제 보고 둘, `next_reply` 상태별, 가짜 dcode 스크립트로 `run_trial`(승인 왕복과 채점과 신호 합, dcode 실패, 호출 상한, candidate 규칙 주입), `read_signals`가 일부만 보이면 포기, `main verify`, `main run`이 규모 출력과 `record_validation`, 검증 전이 아닌 개선안 거부). 테스트는 `RunsClient`를 가짜로 넣고 네트워크를 쓰지 않는다. 변이 6개(잡음 폭 제거, 질문 갈래 제거, 일부 점수 허용, 목표 통과 검사 제거, 반복 1회 갈래 제거, C가 판정에 안 들어감) 모두 테스트가 실패하는 것을 확인했다.
+  - `check.sh lint` 통과(과제 코드 포함, cwd 검사 포함).
+  - 실제 실행 `run --baseline-only --trials 1` (기본 모델 `opengateway:z-ai/glm-5.3-flash-ultrafast`, Jev OpenRouter, Langfuse 켬): 에이전트 실행 3회, dcode 호출 8회, 전체 702초. 세 과제 모두 통과(목표·회귀 테스트).
+
+    | 과제 | 호출 | 시간 | 신호 (0 아닌 것) |
+    |---|---|---|---|
+    | add-slugify | 2 | 55초 | llm_calls 10, tool_calls 5, review_rounds 1 |
+    | fix-median | 3 | 253초 | llm_calls 47, tool_calls 34, tool_errors 10, gate_denies 8, review_rounds 4(→2), repeat_failures 1 |
+    | trap-test-command | 3 | 393초 | llm_calls 42, tool_calls 27, tool_errors 2, gate_denies 1, jev_denies 1, review_rounds 6(→2), test_failures 1 |
+
+    시간에는 점수를 기다린 시간이 들어 있다. 이 실행 뒤 고친 것: `cg.review_rounds`는 요청마다의 증가분이 아니라 계획의 누적 회차라서 합하면 부풀려진다(위 4, 6). 지금은 최댓값을 쓴다(괄호 안 값). 비용: dcode 사용량 표의 비용 칸이 "—"(이 모델은 가격 정보가 없다)라 금액은 못 얻었다. 주 모델 요청 105회, 입력 약 2.78M, 출력 약 93K 토큰(Jev 호출은 따로 집계 못 함).
+  - 실제 실행에서 본 것: fix-median은 리뷰어가 미결 질문을 남겨 실행기가 `answers`의 답을 보냈고, 에이전트가 다시 계획을 내 승인 대기 → "승인" → 완료(3회 왕복). 함정 과제에서 에이전트는 탐색 때 안내 명령의 패턴 불일치를 알아채고 `test_command`를 `-p "test_*.py"`로 고쳤다. 그래도 `test_failures` 1이었다. Langfuse `cg.test.run`으로 확인한 실패 명령은 `python3 -m unittest discover -s tests -p "*_test.py" && python3 -m unittest discover -s tests -p "test_*.py"`(안내 명령을 앞에 붙여 종료 코드 5). 다음 `complete_plan`은 통과. `repeat_failures`는 같은 도구 호출(같은 서명)이 연달아 실패할 때만 오른다(`gate.py`)라서 0이었다. fix-median의 `gate_denies` 8과 `tool_errors` 9는 모두 두 번째 호출(미결 질문에 일반 답을 보낸 직후, 계획 단계)의 `no_approved_plan`이었다. 일반 답이 "진행해 주세요"로 읽혀 에이전트가 승인 전에 쓰기를 시도했다. 실행기가 만든 잡음이 baseline 신호에 섞인다. 세 과제 모두 에이전트가 기존 회귀 테스트 파일에 단언을 더해 `tests_untouched`가 거짓이었다(채점은 원본으로 덮어써서 했다).
+  - 작업 폴더와 로그: `/tmp/dcode-eval-4i5g5013/`(results.json, 과제별 `.log`).
+- 명세와 다르게 한 점 (SPEC 7.5, 10장 M8에 `[M8]`로 반영함): thread id는 헤더에서. `-S recommended,python3`. 과제 테스트는 `unittest`, 회귀 테스트를 시작 저장소에 넣음, `answers` 키, `tasks/ruff.toml`. 승인 왕복은 계획 파일 상태로. 신호는 `wait_for(trace_id)` 대신 세션의 trace 점수 합(모두 보일 때까지 기다리고 일부면 비움). `TrialResult`에 `thread_id`, `calls`, `elapsed_s`. C가 "나빠짐"이면 떨어짐, C는 7.2 임계값 신호만, B는 baseline 전 반복 통과 과제. `--baseline-only`는 판정과 `record_validation`을 하지 않는다. `install()` 분리. 판단 기록 DECISIONS O11~O15.
+- 리뷰 뒤 수정 (2026-11-13):
+  - `run --improvement`가 `proposed`가 아닌 개선안을 거부한다(O16). 전에는 떨어진 개선안을 다시 돌리면 `validation.json`을 덮어썼다.
+  - 채점이 에이전트가 둔 파일에 속을 수 있었다. 테스트 폴더에 `tests/__init__.py`(unittest 단언을 바꾸는 코드)를 두거나 작업 저장소에 `unittest/` 패키지를 두면 `python -m unittest`가 고치지 않은 저장소에서도 통과했다(둘 다 손으로 재현). `run_tests`는 테스트 폴더의 최상위 항목(`tests/`)을 지우고(링크면 링크만) 원본을 복사한 뒤, `python -I -B -c`로 표준 `unittest`를 먼저 읽고 작업 폴더를 경로에 넣어 돌린다. 테스트 실행 환경은 `PATH`만 넘긴다(에이전트가 쓴 코드에 키를 주지 않는다). 지운 탓에 에이전트가 테스트 폴더에 남긴 변경은 작업 폴더에 남지 않는다(`tests_untouched`는 그 전에 잰다). 테스트 `test_run_tests_ignores_agent_harness_files`.
+  - dcode 시간 초과 때 `subprocess.run`이 클라이언트만 SIGKILL해서 `langgraph dev` 서버(새 세션으로 띄움)가 고아로 남을 수 있었다. `_run_dcode`가 SIGTERM을 먼저 보내고(dcode `main`이 모든 모드에서 `_install_termination_signal_handlers`로 이 신호를 `SystemExit`로 바꿔 서버 정리를 돈다) 60초 뒤 SIGKILL, 그 뒤 출력 읽기에도 60초 상한. stdout과 stderr는 한 흐름으로 합쳐 로그에 쓴다. 테스트 `test_run_trial_timeout_terminates`(가짜 dcode가 SIGTERM을 받았는지 단언. `terminate`를 `kill`로 바꾸면 실패).
+  - 정책상 승인 뒤 프로젝트 밖 쓰기는 막히지 않고 J4로 간다(`policy.classify_call`의 `scope_check`, `python3` 셸도 같다). 에이전트가 패키지 안 `tasks/<과제>/tests_*`를 고치면 채점이 그 테스트로 돌았다. `run_trial`이 실행 전후로 과제의 두 테스트 폴더 파일 해시를 비교해 바뀌었으면 테스트를 돌리지 않고 실패로 기록한다(오류 "과제 폴더의 테스트가 실행 중에 바뀌었다"). 테스트 `test_run_trial_task_tests_tampered`.
+  - 비밀 누출: 앞의 실제 실행 산출물(`/tmp/dcode-eval-4i5g5013/`의 results.json, 과제별 `.log`, 작업 저장소 전체)에서 환경과 저장소 `.env`의 키 값 5개를 `grep -rlF`로 찾았다. 0건. results.json에는 `TrialResult` 필드만 들어간다.
+  - 변이 7개(테스트 폴더 지우기 제거, `-I` 제거, 잡음 폭 비교 `>`→`>=`, 호출 상한 `==`→`>`, thread id 재파싱, B의 "모두 통과" 조건 제거, 회귀 테스트를 시작 저장소에 넣지 않기) 모두 테스트가 실패하는 것을 확인했다.
+  - 변이 2개 더(SIGTERM 대신 바로 kill, 과제 폴더 해시 비교 제거)도 테스트가 실패한다.
+  - 검사: `check.sh unit` 257 passed(evalsuite 24). `check.sh lint` 통과. `evalsuite verify` 세 과제 통과. 함정 과제는 해법 적용 뒤에도 안내 명령이 종료 코드 5(PATH의 `python3` 3.12.3)인 것을 확인했다. 업스트림 파일은 고치지 않아 baseline은 돌리지 않았다.
+  - 확인한 문제(고치지 않음): 에이전트가 고칠 코드(`calc/` 등) 자체가 import될 때 unittest를 바꾸는 것은 막을 수 없다(채점은 그 코드를 돌리는 일이다). `FilesystemBackend(virtual_mode=False)`라 에이전트가 절대 경로로 패키지 안 `tasks/`의 `tests_target`, `solution.patch`나 같은 작업 폴더의 다른 반복 로그를 읽을 수 있다(답 누출. 테스트 폴더를 고치면 위 해시 비교가 잡고, 그 밖의 과제 파일과 하네스 코드 쓰기는 승인 뒤 J4에만 기댄다). 함정은 `python3` 3.12 이상에서만 걸린다(3.11 이하는 0개 실행이 종료 코드 0). 개선안 payload가 망가져 `install`이 실패하면 run 전체가 예외로 끝나고 기록이 남지 않는다(이미 돈 baseline 비용은 버려진다). dcode가 오류(호출 상한, 시간 초과)로 끝나도 테스트가 통과하면 A는 통과로 본다(SPEC 7.5 A는 테스트만 본다).
+- 확인 못 한 것: `run --improvement`의 실제 모델 실행(candidate 경로는 가짜 dcode로만). 반복 3회의 잡음 폭과 C 판정을 실제 신호로 본 적 없다. 함정 과제가 T8에 쓸 만큼 신호를 만드는지: 이번에는 `test_failures` 1로 7.2 임계값(per_run 2)에 못 미쳤다. 에이전트가 함정을 탐색에서 알아챘다. M9에서 T8 재현이 안 되면 함정을 더 숨기거나 임계값을 다시 봐야 한다(과제를 바꾸면 기록한다). Jev 호출 수 어림(실행당 5회)은 근거 없음. 평가 실행의 trace에도 `dcode-assistant` 태그가 붙고 `/improve`는 프로젝트 구분 없이 최근 20건을 읽는다. `--improvement` 한 번(18 실행, 호출 40회 이상)이 그 창을 채우므로 M9 T8에서 함정 과제 두 번 → `/improve` 순서가 평가 실행 뒤로 밀리지 않게 해야 한다. `ty` 안 돌림.
+- 참고: 작업 중 `scripts/smoke_dcode.sh`(`DCODE` 덮어쓰기)와 `scripts/release.sh`가 다른 쪽에서 바뀌거나 생겼다. 이 마일스톤에서 만든 변경이 아니어서 손대지 않았다.
+
+## M9. 보정과 README — 다음
+
+먼저 볼 것: `FOLLOWUPS.md`(F1 계획 전 읽기 전용 셸 거부, F2 auto 모드 분류기 시간 초과, F3 릴리스본 자동 업데이트). M8의 함정 과제가 T8용 신호를 만들지 못한 문제도 M8 절에 있다.

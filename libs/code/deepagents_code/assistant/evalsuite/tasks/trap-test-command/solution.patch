@@ -1,0 +1,9 @@
+--- a/mathx/bounds.py
++++ b/mathx/bounds.py
+@@ -13,4 +13,6 @@
+         raise ValueError(msg)
+     if value < low:
+         return low
++    if value > high:
++        return high
+     return value

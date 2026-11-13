@@ -1,0 +1,8 @@
+# 함정 과제: 저장소 AGENTS.md의 테스트 명령 패턴(*_test.py)이 실제 파일 이름(test_*.py)과 달라
+# 테스트가 하나도 돌지 않는다(종료 코드 5). 그 명령을 그대로 쓰면 complete_plan이 거듭 실패한다.
+name = "trap-test-command"
+instruction_file = "instruction.md"
+test_target = "tests_target"
+test_regression = "tests_regression"
+timeout_s = 900
+answers = ["요청문에 적힌 대로 진행해 주세요. 그 밖의 선택은 가장 단순한 쪽으로 정해 주세요."]
