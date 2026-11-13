@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from langgraph.store.base import BaseStore
     from langgraph.types import Command
 
+    from deepagents_code.assistant.decider import JevDecider
     from deepagents_code.assistant.options import PlanGateOptions
     from deepagents_code.config import CredentialsSnapshot, ModelResult
     from deepagents_code.extensions.registry import ExtensionRegistry
@@ -2539,6 +2540,30 @@ def get_skill_sources(
     return sources
 
 
+def _auto_jev_decider(environ: Mapping[str, str]) -> JevDecider | None:
+    """Build the Jev reviewer for Auto mode, or `None` when no key is set.
+
+    A bad threshold still raises, so a typo cannot turn the review off.
+
+    Args:
+        environ: Workspace environment that may hold the Jev key.
+
+    Returns:
+        A Jev client, or `None` when neither key is set.
+    """
+    from deepagents_code.assistant.decider import (
+        KEY_ENV,
+        OPENROUTER_KEY_ENV,
+        JevDecider,
+    )
+
+    if not (
+        environ.get(KEY_ENV, "").strip() or environ.get(OPENROUTER_KEY_ENV, "").strip()
+    ):
+        return None
+    return JevDecider.from_environment(environ)
+
+
 def create_cli_agent(
     model: str | BaseChatModel,
     assistant_id: str,
@@ -3453,6 +3478,8 @@ def create_cli_agent(
                 classifier_timeout_seconds=resolve_auto_classifier_timeout(),
                 trusted_ask_user_tool=trusted_ask_user_tool,
                 trusted_compaction_tool=compaction_middleware.tools[0],
+                jev_review=True,
+                jev_decider=_auto_jev_decider(environment),
             )
         )
     elif resolved_interrupt_on is not None:
