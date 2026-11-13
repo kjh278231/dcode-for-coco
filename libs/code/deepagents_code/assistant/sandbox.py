@@ -28,7 +28,9 @@
    PID 네임스페이스라 밖의 같은 uid 프로세스에 시그널, prlimit, renice를 못 하고,
    1번이 끝나면 커널이 남은 백그라운드 프로세스를 모두 죽인다. 각 부모는 자식의
    종료 코드를 넘기고, 부모가 죽으면 자식도 SIGKILL로 죽는다
-8. 손자가 `/bin/sh -c <명령>`을 cwd 그대로 exec한다
+8. 손자가 `/bin/sh -c <명령>`을 cwd 그대로 exec한다. [F9] 환경에
+   `PYTEST_ADDOPTS`(기존 값 뒤에 `-o cache_dir=<쓰기 공간>/pytest-cache`)와
+   `PYTHONDONTWRITEBYTECODE=1`을 더한다
 
 설정이 하나라도 실패하면 명령을 돌리지 않고 종료 코드 125로 끝난다.
 """
@@ -282,6 +284,12 @@ def main(argv: list[str]) -> NoReturn:
         print(f"{SETUP_FAILED_TEXT}: {e}", file=sys.stderr)  # noqa: T201
         sys.exit(SETUP_FAILED_EXIT)
     os.environ["TMPDIR"] = scratch
+    # [F9] 읽기 전용이라 pytest 캐시와 .pyc 쓰기가 EROFS 경고만 낸다.
+    # 캐시 플러그인을 끄면 cache 픽스처가 깨져 캐시를 버리는 공간으로 옮긴다
+    addopts = os.environ.get("PYTEST_ADDOPTS", "")
+    cache = shlex.quote(f"cache_dir={scratch}/pytest-cache")
+    os.environ["PYTEST_ADDOPTS"] = f"{addopts} -o {cache}".strip()
+    os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
     os.execv("/bin/sh", ["sh", "-c", argv[1]])  # noqa: S606  # 이 런처의 목적
 
 

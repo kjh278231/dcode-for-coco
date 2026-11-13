@@ -193,6 +193,33 @@ def test_scratch_is_writable_and_discarded(project: Path) -> None:
 
 
 @needs_sandbox
+def test_pytest_cache_and_bytecode_writes_are_off(project: Path) -> None:
+    """[F9] 기존 PYTEST_ADDOPTS는 남기고 pytest 캐시를 버리는 공간으로 옮긴다."""
+    env = {**os.environ, "PYTEST_ADDOPTS": "-q"}
+    env.pop("PYTHONDONTWRITEBYTECODE", None)
+    code, out = launch(
+        'echo "$PYTEST_ADDOPTS|$PYTHONDONTWRITEBYTECODE"', project, env=env
+    )
+    assert code == 0
+    assert out.startswith("-q -o cache_dir=/")
+    assert out.endswith("/pytest-cache|1\n")
+    # 리뷰 뒤: 캐시 플러그인을 끄면 cache 픽스처를 쓰는 테스트가 깨졌다
+    env.pop("PYTEST_ADDOPTS")
+    (project / "test_c.py").write_text(
+        'def test_c(cache):\n    cache.set("k", 1)\n    assert cache.get("k", 0) == 1\n'
+    )
+    before = snapshot(project)
+    code, out = launch(
+        f"{shlex.quote(sys.executable)} -m pytest -p no:warnings test_c.py",
+        project,
+        env=env,
+    )
+    assert code == 0, out
+    assert "1 passed" in out
+    assert snapshot(project) == before
+
+
+@needs_sandbox
 def test_unix_socket_connect_is_denied(project: Path) -> None:
     path = project / "s.sock"
     server = subprocess.Popen(
@@ -540,11 +567,22 @@ def test_pre_plan_execute_runs_in_sandbox_sync(tmp_path: Path) -> None:
 
 @needs_sandbox
 @pytest.mark.usefixtures("sandbox_on")
-async def test_protected_dir_shell_write_still_denied(tmp_path: Path) -> None:
-    h = Harness(tmp_path, [execute("touch .deepagents/plans/x"), done()])
-    message = tool_result(await h.say("만들어"), "e")
-    assert message.status == "error"
-    assert ".deepagents/" in str(message.content)
+async def test_protected_dir_shell_runs_read_only_in_sandbox(tmp_path: Path) -> None:
+    """[F9] 보호 폴더를 언급한 명령은 거부 대신 샌드박스. 읽기는 되고 쓰기는 EROFS."""
+    plans = tmp_path / ".deepagents" / "plans"
+    plans.mkdir(parents=True)
+    (plans / "p.md").write_text("")
+    # 실사용에서 거부된 명령의 모양
+    seen = "git diff HEAD --stat | head -5; ls .deepagents/plans/ 2>/dev/null | head"
+    h = Harness(
+        tmp_path, [execute("touch .deepagents/plans/x"), execute(seen, "l"), done()]
+    )
+    result = await h.say("만들어")
+    assert EROFS in str(tool_result(result, "e").content)
+    assert not (plans / "x").exists()
+    listed = tool_result(result, "l")
+    assert listed.status != "error"
+    assert "p.md" in str(listed.content)
 
 
 @pytest.mark.usefixtures("sandbox_on")
@@ -572,6 +610,108 @@ async def test_post_approval_execute_is_not_sandboxed(tmp_path: Path) -> None:
     assert (tmp_path / "y").exists()
     # 읽기 명령도 샌드박스 밖이다 (안에서는 /run이 비어 있다)
     assert host_run[0] in str(tool_result(h.last, "l").content)  # type: ignore[attr-defined]
+
+
+NOTE_SCOPE = "[게이트] 승인된 계획의 범위 밖으로 판정돼"
+
+
+@needs_sandbox
+@pytest.mark.usefixtures("sandbox_on")
+async def test_out_of_scope_execute_runs_read_only_after_approval(
+    tmp_path: Path,
+) -> None:
+    """[F9] J4가 거부할 execute는 샌드박스에서 돈다. 대상 쓰기는 그대로 된다."""
+    write_target = tool_call(
+        "write_file", {"file_path": str(tmp_path / "app.py"), "content": "v1"}, "w"
+    )
+    write_other = tool_call(
+        "write_file", {"file_path": str(tmp_path / "other.py"), "content": "x"}, "o"
+    )
+    script = [execute(PRINT, "p"), execute("touch other", "tc"), write_target]
+    h = await approved(
+        tmp_path,
+        [*script, write_other, done()],
+        decider=FakeDecider(script={"J4": 0.0}),
+    )
+    last = h.last  # type: ignore[attr-defined]
+    probe = str(tool_result(last, "p").content)
+    assert "42" in probe
+    assert NOTE_SCOPE in probe
+    assert EROFS in str(tool_result(last, "tc").content)
+    assert not (tmp_path / "other").exists()
+    assert (tmp_path / "app.py").read_text() == "v1"  # 계획 대상 쓰기는 샌드박스 밖
+    assert tool_result(last, "o").status == "error"  # 범위 밖 파일 쓰기는 거부
+    assert not (tmp_path / "other.py").exists()
+    counters = (await h.state())["_cg_counters"]
+    assert counters.get("jev_denies") == 1  # write_file 하나만
+
+
+@needs_sandbox
+@pytest.mark.usefixtures("sandbox_on")
+async def test_protected_dir_shell_never_reaches_j4_after_approval(
+    tmp_path: Path,
+) -> None:
+    """[F9] J4가 통과시켜도 보호 폴더를 언급한 명령은 샌드박스 안이다."""
+    h = await approved(
+        tmp_path,
+        [execute("touch .deepagents/plans/x"), done()],
+        decider=FakeDecider(script={"J4": 1.0}),
+    )
+    message = str(tool_result(h.last, "e").content)  # type: ignore[attr-defined]
+    assert EROFS in message
+    assert "[게이트] .deepagents/ 보호 폴더를 언급해" in message
+    assert not (tmp_path / ".deepagents" / "plans" / "x").exists()
+
+
+@needs_sandbox
+@pytest.mark.usefixtures("sandbox_on")
+def test_protected_dir_shell_note_sync(tmp_path: Path) -> None:
+    # submit_plan은 비동기만 있어 동기 경로는 계획 전 보호 폴더 명령으로 본다
+    (tmp_path / ".deepagents" / "plans").mkdir(parents=True)
+    h = Harness(tmp_path, [execute("touch .deepagents/plans/x"), done()])
+    result = h.agent.invoke({"messages": [HumanMessage(content="만들어")]}, h.config)
+    message = str(tool_result(result, "e").content)
+    assert EROFS in message
+    assert "[게이트] .deepagents/ 보호 폴더를 언급해" in message
+
+
+@needs_sandbox
+@pytest.mark.usefixtures("sandbox_on")
+async def test_out_of_scope_execute_sandboxed_sync_and_broken_launcher(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """[F9] 리뷰 뒤: 동기 J4 실패도 샌드박스. 런처가 깨지면 명령이 돌지 않는다."""
+    after = [done(), execute("touch other", "tc"), done(), execute("touch b", "b")]
+    h = await approved(
+        tmp_path, [*after, done()], decider=FakeDecider(script={"J4": 0.0})
+    )
+    result = h.agent.invoke({"messages": [HumanMessage(content="계속")]}, h.config)
+    message = str(tool_result(result, "tc").content)
+    assert EROFS in message
+    assert NOTE_SCOPE in message
+    assert not (tmp_path / "other").exists()
+    # 탐침이 캐시된 뒤 런처가 사라져도 감싼 명령은 실패할 뿐 그대로 돌지 않는다
+    monkeypatch.setattr(sandbox, "LAUNCHER", str(tmp_path / "missing.py"))
+    result = await h.say("하나 더")
+    assert "missing.py" in str(tool_result(result, "b").content)
+    assert not (tmp_path / "b").exists()
+
+
+@pytest.mark.usefixtures("sandbox_on")
+async def test_unavailable_sandbox_keeps_denies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sandbox, "_probe", lambda: False)
+    h = await approved(
+        tmp_path,
+        [execute(PRINT, "p"), execute("touch .deepagents/plans/x", "l"), done()],
+        decider=FakeDecider(script={"J4": 0.0}),
+    )
+    last = h.last  # type: ignore[attr-defined]
+    assert "범위 밖이다" in str(tool_result(last, "p").content)
+    assert tool_result(last, "p").status == "error"
+    assert ".deepagents/" in str(tool_result(last, "l").content)
+    assert tool_result(last, "l").status == "error"
 
 
 @needs_sandbox

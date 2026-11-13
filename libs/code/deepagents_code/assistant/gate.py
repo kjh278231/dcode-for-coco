@@ -99,6 +99,14 @@ _DENY_TEXT = {
     "subagent_read_only": "서브에이전트는 읽기 전용이다. 파일 변경과 쓰기 명령은 "
     "주 에이전트만 한다. 필요한 변경은 결과에 적어 돌려줘라.",
 }
+# [F9] J4 실패나 보호 폴더 언급으로 샌드박스에 보낸 execute 결과에 붙인다.
+# 모델이 쓰기 실패를 이해하게. 계획 전 보통 명령(사유 sandbox)에는 붙이지 않는다
+_SANDBOX_NOTE = {
+    "sandbox_scope": "\n\n[게이트] 승인된 계획의 범위 밖으로 판정돼 읽기 전용 "
+    "샌드박스에서 돌렸다. 쓰기가 필요하면 submit_plan으로 계획을 고쳐라.",
+    "sandbox_protected": "\n\n[게이트] .deepagents/ 보호 폴더를 언급해 읽기 전용 "
+    "샌드박스에서 돌렸다. 계획, Memory, 개선안 폴더는 직접 고칠 수 없다.",
+}
 _J5_YES = "\n\n[판정] 이 요청은 코드 변경이 필요하다. submit_plan으로 계획을 제출하라."
 _J5_NO = "\n\n[판정] 이 요청은 코드 변경이 필요 없어 보인다. 탐색 결과로 답하라."
 
@@ -195,6 +203,21 @@ def _message_of(result: object) -> ToolMessage | None:
         messages = result.update.get("messages") or []
         return next((m for m in reversed(messages) if isinstance(m, ToolMessage)), None)
     return None
+
+
+def _append_text(
+    result: ToolMessage | Command[Any], text: str
+) -> ToolMessage | Command[Any]:
+    # 도구 결과의 ToolMessage 본문 끝에 글을 붙인다
+    message = _message_of(result)
+    if message is None:
+        return result
+    new = message.model_copy(update={"content": _text_of(message) + text})
+    if isinstance(result, ToolMessage):
+        return new
+    update = dict(result.update)  # ty: ignore[no-matching-overload]
+    update["messages"] = [new if m is message else m for m in update["messages"]]
+    return dataclasses.replace(result, update=update)
 
 
 def _with_updates(
@@ -436,16 +459,20 @@ class PlanGateMiddleware(AgentMiddleware):
             mcp_mutating=self._options.mcp_mutating_tool_names,
             fresh_approval=fresh,
         )
+        pre_plan = phase != "executing" and reason in {
+            "read_only_shell",
+            "no_approved_plan",
+        }
         if (
             name in SHELL_TOOLS
-            and phase != "executing"
-            and reason in {"read_only_shell", "no_approved_plan"}
+            and (pre_plan or reason == "protected_path")
             and self._local_shell
             and _sandboxable(args)
         ):
             # [F7] 승인 전 execute는 정적 판정 대신 읽기 전용 샌드박스에서 돈다.
-            # 보호 폴더를 언급한 쓰기 명령(protected_path)은 전처럼 거부한다
-            return "sandbox", "sandbox", None
+            # [F9] 보호 폴더를 언급한 명령은 단계와 관계없이 샌드박스에서 돈다.
+            # 읽기는 되고 쓰기는 EROFS다. J4에 보내지 않는다(통과하면 쓸 수 있다)
+            return "sandbox", "sandbox" if pre_plan else "sandbox_protected", None
         if decision != "needs_scope_check":
             return decision, reason, None
         if plan is None:
@@ -458,6 +485,11 @@ class PlanGateMiddleware(AgentMiddleware):
         )
         verdict = self._options.decider.judge(text, [question])[0]
         if not verdict.passed:
+            if name in SHELL_TOOLS and self._local_shell and _sandboxable(args):
+                # [F9] 거부 대신 읽기 전용 샌드박스. 쓰기는 거부처럼 실패하고
+                # 읽기 탐침은 돈다. 거부가 아니라 세지 않는다(O28)
+                tracing.record("cg.gate.sandbox", input={"tool": name})
+                return "sandbox", "sandbox_scope", None
             return "deny", "out_of_scope", None
         target = None
         if name in WRITE_PATH_TOOLS:
@@ -493,16 +525,11 @@ class PlanGateMiddleware(AgentMiddleware):
             "cg.explore",
             output={"summary_chars": len(summary), "needs_change": passed},
         )
-        judged = message.model_copy(
-            update={"content": summary + (_J5_YES if passed else _J5_NO)}
-        )
+        judged = _append_text(result, _J5_YES if passed else _J5_NO)
         flags = {EXPLORED_KEY: True, NEEDS_CHANGE_KEY: passed}
-        if isinstance(result, Command):
-            update = dict(result.update)  # ty: ignore[no-matching-overload]
-            update["messages"] = [
-                judged if m is message else m for m in update["messages"]
-            ]
-            return dataclasses.replace(result, update={**update, **flags})
+        if isinstance(judged, Command):
+            update = judged.update  # ty: ignore[no-matching-overload]
+            return dataclasses.replace(judged, update={**update, **flags})
         return Command(update={"messages": [judged], **flags})
 
     @staticmethod
@@ -553,6 +580,8 @@ class PlanGateMiddleware(AgentMiddleware):
         if decision == "explore":
             return self._counted(request, self._explored(request, handler(request)))
         result = handler(_sandboxed(request) if decision == "sandbox" else request)
+        if reason in _SANDBOX_NOTE:
+            result = _append_text(result, _SANDBOX_NOTE[reason])
         self._extend_targets(request.state.get(PLAN_ID_KEY), target, result)
         return self._counted(request, result)
 
@@ -572,6 +601,8 @@ class PlanGateMiddleware(AgentMiddleware):
             return await asyncio.to_thread(self._counted, request, denied, reason)
         run = _sandboxed(request) if decision == "sandbox" else request
         result = await handler(run)
+        if reason in _SANDBOX_NOTE:
+            result = _append_text(result, _SANDBOX_NOTE[reason])
         if decision == "explore":
             result = await asyncio.to_thread(self._explored, request, result)
         else:

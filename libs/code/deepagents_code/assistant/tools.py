@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
@@ -35,6 +36,7 @@ from deepagents_code.assistant.options import (
 )
 from deepagents_code.assistant.plan import (
     EMPTY_MARK,
+    REQUIRED_SECTIONS,
     Plan,
     PlanFormatError,
     PlanStore,
@@ -52,6 +54,9 @@ if TYPE_CHECKING:
     from deepagents_code.assistant.reviewer import ReviewResult
 
 TEST_TIMEOUT_S = 600
+UNRESOLVED_SECTION = "미해결 리뷰 의견"
+# [F9] 저장된 계획은 `## 제목` 줄로 절을 나눈다. 본문의 이 줄은 게이트 절을 흉내 낸다
+_HEADING_RE = re.compile(r"^ {0,3}##(?:[ \t]|$)", re.MULTILINE)
 OUTPUT_TAIL_CHARS = 4000
 
 
@@ -67,8 +72,13 @@ def _reply(
     return Command(update={**updates, "messages": [message]})
 
 
+def _flat(text: str) -> str:
+    # 모델이 낸 한 항목을 한 줄로. 줄바꿈 뒤 `## 제목`이 절이 되지 않게
+    return " ".join(text.split())
+
+
 def _bullets(items: tuple[str, ...] | list[str]) -> str:
-    return "\n".join(f"- {item}" for item in items) or EMPTY_MARK
+    return "\n".join(f"- {_flat(item)}" for item in items) or EMPTY_MARK
 
 
 def _dedupe(*groups: tuple[str, ...] | list[str]) -> tuple[str, ...]:
@@ -87,7 +97,7 @@ def _review_entry(
     review: ReviewResult,
 ) -> str:
     judged = [
-        f"- {v.name}: {'통과' if v.passed else '통과 못 함'} ({v.reason})"
+        f"- {v.name}: {'통과' if v.passed else '통과 못 함'} ({_flat(v.reason)})"
         for v in verdicts
     ]
     parts = [
@@ -97,7 +107,7 @@ def _review_entry(
         "의견:\n" + _bullets(list(review.comments)),
     ]
     if review.error:
-        parts.append(f"리뷰 실패: {review.error}")
+        parts.append(f"리뷰 실패: {_flat(review.error)}")
     return "\n\n".join(parts)
 
 
@@ -211,6 +221,12 @@ def build_plan_tools(
             },
         )
         issues = validate_plan(plan)
+        issues += [
+            f"'{title}' 본문에 '## ' 제목 줄을 쓸 수 없다. '###'나 목록을 써라."
+            for title in REQUIRED_SECTIONS
+            # 파일을 텍스트로 다시 읽으면 \r도 줄바꿈이 된다
+            if _HEADING_RE.search(plan.sections[title].replace("\r", "\n"))
+        ]
         verdicts: list[Verdict] = []
         if not issues:
 
@@ -240,6 +256,15 @@ def build_plan_tools(
         else:
             status = "reviewed"
             text = "검토가 끝났다. request_plan_approval을 불러 사람의 승인을 받아라."
+            if review.comments:
+                # [F9] 상한에 닿아 남은 의견을 승인 질문 바로 위(마지막 절)에 둔다.
+                # 다시 제출하면 절을 새로 만들어 사라진다
+                sections[UNRESOLVED_SECTION] = (
+                    f"리뷰 상한({MAX_REVIEW_ROUNDS}회)에 닿아 미해결 리뷰 의견 "
+                    f"{len(review.comments)}개가 남았다.\n"
+                    + _bullets(list(review.comments))
+                )
+                text += f" {sections[UNRESOLVED_SECTION]}"
         plan = plan.with_updates(
             status=status, review_round=review_round, sections=sections
         )

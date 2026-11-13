@@ -560,7 +560,7 @@ def classify_call(
 | 8 | `WRITE_PATH_TOOLS`이고 상대 경로가 `targets`에 있고 `fresh_approval`이다 | allow | `in_targets` |
 | 9 | 그 밖 | needs_scope_check | `scope_check` |
 
-[F7] 표 다음에 게이트가 한 번 더 본다(`gate._decide`, policy는 그대로다). `execute`이고 `phase`가 `executing`이 아니고 사유가 `read_only_shell`(4번)이나 `no_approved_plan`(7번)이면, 샌드박스를 쓸 수 있을 때 결정을 `sandbox`로 바꾼다(3.7). 5번 `protected_path`는 그대로 거부다. 그래서 4번 `is_read_only_shell`과 그 아래 F1~F6 판정은 샌드박스를 못 쓸 때의 대체 경로이고, 승인 뒤에는 전처럼 4번이 J4 없이 통과시키는 판정이다.
+[F7] 표 다음에 게이트가 한 번 더 본다(`gate._decide`, policy는 그대로다). `execute`이고 `phase`가 `executing`이 아니고 사유가 `read_only_shell`(4번)이나 `no_approved_plan`(7번)이면, 샌드박스를 쓸 수 있을 때 결정을 `sandbox`로 바꾼다(3.7). 5번 `protected_path`는 그대로 거부다([F9] 샌드박스를 쓸 수 있으면 단계와 관계없이 `sandbox`로 바꾼다. 3.7의 4''). 그래서 4번 `is_read_only_shell`과 그 아래 F1~F6 판정은 샌드박스를 못 쓸 때의 대체 경로이고, 승인 뒤에는 전처럼 4번이 J4 없이 통과시키는 판정이다.
 
 쓰기 계열은 `WRITE_PATH_TOOLS | SHELL_TOOLS | OTHER_MUTATING_TOOLS | mcp_mutating`이다. `mcp_mutating`에는 확장 도구 이름도 들어 있다 [M4].
 
@@ -667,9 +667,9 @@ def submit_plan(
 | 의견이 있고 회차가 `MAX_REVIEW_ROUNDS` 미만이다 | draft | planning | 의견 목록. 반영해서 다시 제출하라. 정상 흐름이라 status는 `success` [M3] |
 | 그 밖 (의견이 없거나, 회차가 상한이거나, 리뷰 실패) | reviewed | planning | `request_plan_approval`을 불러라 |
 
-회차가 상한에 닿았는데 의견이 남으면 그 의견은 계획 파일의 "리뷰 기록"에 남아 사람에게 보인다.
+회차가 상한에 닿았는데 의견이 남으면 그 의견은 계획 파일의 "리뷰 기록"에 남아 사람에게 보인다. [F9] 리뷰 기록은 승인 화면의 맨 아래 묻혀 있어 실사용에서 사람이 못 보고 승인했다. 그래서 게이트가 쓰는 절 "미해결 리뷰 의견"을 더 둔다: 본문은 `리뷰 상한(2회)에 닿아 미해결 리뷰 의견 N개가 남았다.`와 의견 목록이다. 정해진 절 뒤라 계획 마크다운의 마지막 절, 곧 승인 질문(대화형 승인·질문 모드, 비대화 출력 모두) 바로 위에 온다. 도구 결과에도 같은 글을 붙인다. `submit_plan`은 절을 매번 새로 만들어 다시 제출하면 사라진다.
 
-**게이트가 소유하는 절.** "미결 질문", "결정 사항", "리뷰 기록" 셋은 게이트 코드만 쓴다. 모델은 질문을 더할 수 있지만 뺄 수 없다. 질문은 사람이 답해야 없어진다. "결정 사항"은 사람의 답을 코드가 적은 것이고 모델이 고칠 인자가 없다. 이 절이 작업 기록의 "사용자 결정"으로 저장되기 때문이다 (5.2절).
+**게이트가 소유하는 절.** "미결 질문", "결정 사항", "리뷰 기록" 셋은 게이트 코드만 쓴다([F9] 상한에서 남은 의견의 "미해결 리뷰 의견"도 게이트가 쓴다). 모델은 질문을 더할 수 있지만 뺄 수 없다. 질문은 사람이 답해야 없어진다. "결정 사항"은 사람의 답을 코드가 적은 것이고 모델이 고칠 인자가 없다. 이 절이 작업 기록의 "사용자 결정"으로 저장되기 때문이다 (5.2절). [F9] 대화에서 사용자가 정한 것(질문 모드 밖)은 `decisions` 인자를 두지 않고 프롬프트 규칙으로 요구사항 본문에 `(사용자 결정: ...)`으로 적게 한다. 모델이 쓴 글이 Memory의 "사용자 결정"에 들어가지 않게 하려는 것이다 (O35). [F9 리뷰] 저장된 계획은 `## 제목` 줄로 절을 나누므로, 모델이 쓰는 다섯 절 본문에 `## ` 제목 줄(앞 공백 3칸까지, `\r`도 줄바꿈으로 본다)이 있으면 `submit_plan`이 형식 문제로 돌려보낸다. 게이트 절을 흉내 내지 못하게 하려는 것이다. 목록으로 넣는 글(질문, 리뷰 의견, 형식 문제, 판정 이유)은 한 줄로 펴서 적는다.
 
 비동기 구현(`coroutine`)을 반드시 함께 둔다. 서버 그래프는 비동기 경로를 쓴다.
 
@@ -868,6 +868,8 @@ class PlanGateMiddleware(AgentMiddleware):
         PlanStore.save, tracing.span("cg.scope.extend")
         [M3] 추가는 handler 뒤에 한다. 계획을 다시 읽고 미들웨어의 잠금 안에서 저장해 병렬 쓰기가 서로의 대상을 덮지 않는다
      c) 통과 못 하면 거부한다. 사유 out_of_scope. counters.jev_denies를 1 올린다
+        [F9] 단 execute이고 샌드박스를 쓸 수 있으면(아래 4') 거부 대신 읽기 전용 샌드박스에서 돌린다.
+        사유 sandbox_scope, 거부로 세지 않고(jev_denies, gate_denies 그대로) tracing.record("cg.gate.sandbox")
         메시지: "승인된 계획의 범위 밖이다. 필요하면 submit_plan으로 계획을 고쳐 재검토를 받아라"
 6) 결과가 오류 상태이면 counters.tool_errors를 1 올린다
    같은 (name, args 요약)이 직전에도 오류였으면 counters.repeat_failures를 1 올린다
@@ -883,9 +885,16 @@ class PlanGateMiddleware(AgentMiddleware):
     아닌 str, sandbox.available()이면 결정 "sandbox"
 5') sandbox면 request.override(tool_call={..., "args": {..., "command": sandbox.wrap_command(원래)}})를
     handler에 넘긴다. 카운터와 요약(_counted)은 원래 요청으로 한다
+4'') [F9] 단계와 관계없이 execute의 사유가 protected_path(보호 폴더를 언급한 읽기 전용이 아닌 명령)이고
+    위 조건(LocalShellBackend, 빈 명령 아님, available())이면 거부 대신 sandbox. 사유 sandbox_protected.
+    J4로 보내지 않는다(통과하면 샌드박스 밖에서 보호 폴더에 쓸 수 있다). 못 쓰면 전처럼 거부
+5'') [F9] 사유가 sandbox_scope나 sandbox_protected면 결과 본문 끝에 "[게이트] ... 읽기 전용 샌드박스에서
+    돌렸다" 한 줄을 붙인다. 모델이 쓰기 실패(EROFS)의 이유를 알게 한다. 계획 전 보통 명령(사유 sandbox)에는 붙이지 않는다
 ```
 
-- 런처: `<sys.executable> -I <sandbox.py 절대 경로> <명령>`을 `exec`로 돌린다. user+mount+net+IPC+PID 네임스페이스(자기 uid 매핑), `/` 재귀 private, `/run`과 `/dev/pts` tmpfs, `mount_setattr(AT_RECURSIVE, RDONLY)`, 버리는 tmpfs(보통 `/tmp`, cwd가 `/tmp` 아래면 `/run/tmp`이고 `/tmp`는 읽기 전용), TMPDIR, RLIMIT_CORE 1 고정, seccomp(`socket`은 AF_INET, AF_INET6, AF_NETLINK만 열고 AF_UNIX, AF_VSOCK 등은 EPERM, 데이터그램 `socketpair`, io_uring, ptrace, process_vm_readv/writev, pidfd_getfd, add_key/request_key/keyctl, RLIMIT_CORE를 바꾸는 setrlimit/prlimit64는 EPERM, x32와 x86_64 밖은 종료), fork 두 번(새 PID 네임스페이스의 1번은 기다리기만 하고, 손자가 읽기 전용 새 `/proc`과 setsid), `/bin/sh -c <명령>`. [F7 리뷰] PID 네임스페이스로 밖의 같은 uid 프로세스에 시그널, prlimit, renice를 못 하고 `/proc`에 안 보이며, 명령이 끝나면 남은 백그라운드 프로세스도 커널이 죽인다. RLIMIT_CORE 고정은 core_pattern이 파이프(WSL `/wsl-capture-crash`)일 때 한도 0에서도 root 도우미가 덤프를 C: 드라이브에 쓰기 때문이다(한도 1만 덤프를 멈춘다). 설정이 실패하면 명령 없이 125와 `plan sandbox: setup failed, command not run`.
+[F9] 안전 논리: 샌드박스로 보내는 것은 전에 거부되던 호출뿐이다(J4 실패, 보호 폴더 언급). 샌드박스는 쓰기가 버리는 tmpfs 밖에서 모두 실패하고 네트워크가 없으니 거부보다 쓰기 능력이 늘지 않는다. 읽기 능력은 계획 전 샌드박스와 같다. J4가 통과시킨 execute와 계획 대상 쓰기 도구는 전처럼 샌드박스 밖이다. 쓰기 경로 도구(write_file, edit_file 등)의 J4 실패와 보호 경로는 전처럼 거부다. 보호 폴더 읽기는 원래 막을 뜻이 아니었다(탐색 에이전트는 `.deepagents/memory/`를 읽고, `ls`·`read_file` 도구로도 읽힌다. 거부 문장도 "고칠 수 없다"). 실사용에서 `git diff HEAD --stat | head -5; ls .deepagents/plans/ 2>/dev/null | head`가 거부됐고, 승인 뒤 계획 대상 밖의 읽기 전용 python 탐침이 J4에서 세 번 거부됐는데 같은 탐침은 통과하기도 했다.
+
+- 런처: `<sys.executable> -I <sandbox.py 절대 경로> <명령>`을 `exec`로 돌린다. user+mount+net+IPC+PID 네임스페이스(자기 uid 매핑), `/` 재귀 private, `/run`과 `/dev/pts` tmpfs, `mount_setattr(AT_RECURSIVE, RDONLY)`, 버리는 tmpfs(보통 `/tmp`, cwd가 `/tmp` 아래면 `/run/tmp`이고 `/tmp`는 읽기 전용), TMPDIR, RLIMIT_CORE 1 고정, seccomp(`socket`은 AF_INET, AF_INET6, AF_NETLINK만 열고 AF_UNIX, AF_VSOCK 등은 EPERM, 데이터그램 `socketpair`, io_uring, ptrace, process_vm_readv/writev, pidfd_getfd, add_key/request_key/keyctl, RLIMIT_CORE를 바꾸는 setrlimit/prlimit64는 EPERM, x32와 x86_64 밖은 종료), fork 두 번(새 PID 네임스페이스의 1번은 기다리기만 하고, 손자가 읽기 전용 새 `/proc`과 setsid), `/bin/sh -c <명령>`. [F7 리뷰] PID 네임스페이스로 밖의 같은 uid 프로세스에 시그널, prlimit, renice를 못 하고 `/proc`에 안 보이며, 명령이 끝나면 남은 백그라운드 프로세스도 커널이 죽인다. RLIMIT_CORE 고정은 core_pattern이 파이프(WSL `/wsl-capture-crash`)일 때 한도 0에서도 root 도우미가 덤프를 C: 드라이브에 쓰기 때문이다(한도 1만 덤프를 멈춘다). 설정이 실패하면 명령 없이 125와 `plan sandbox: setup failed, command not run`. [F9] 환경에 `PYTEST_ADDOPTS`(기존 값 뒤에 ` -o cache_dir=<버리는 tmpfs>/pytest-cache`)와 `PYTHONDONTWRITEBYTECODE=1`을 더한다. 실사용에서 pytest 캐시 쓰기가 EROFS 경고를 냈다. `-p no:cacheprovider`는 `cache` 픽스처를 쓰는 테스트를 깨서(리뷰에서 확인) 캐시를 버리는 공간으로 옮긴다.
 - 가용성: `DEEPAGENTS_CODE_PLAN_SANDBOX`가 `0`이나 `false`가 아니고, linux x86_64이고, 런처로 `true`를 돌린 탐침이 0이면 쓴다. 탐침은 프로세스당 한 번이다. 못 쓰면 F1~F6 정적 판정 그대로다. 실행 중 125는 정적 판정으로 다시 보내지 않는다(쓰기는 없고 출력이 이유를 말한다).
 - 보이는 것: 모델, 승인 화면, auto 분류기, 체크포인트는 원래 명령을 본다. 게이트 안쪽의 `ServerHooksMiddleware`(PreToolUse 훅)와 실행은 감싼 명령을 본다. 결과는 업스트림 `execute` 그대로(`status="success"`, 출력과 `Exit code`)라 쓰기 실패는 "Read-only file system"과 0이 아닌 종료 코드로 보이고 거부(`gate_denies`)로 세지 않는다.
 
@@ -1118,6 +1127,14 @@ def gate_prompt(phase: str, plan_summary: str | None) -> str:
 6. 계획에 없는 파일을 고쳐야 하면 `submit_plan`으로 계획을 고친다.
 7. `.deepagents/plans`, `.deepagents/memory`는 직접 고치지 않는다.
 8. [M5] 저장소에 계속 적용할 규칙을 알게 되면 `propose_rule`로 제안한다. 사람이 확인해야 저장된다.
+
+[F9] 실사용 검토(thread 01a1d30a, glm-5.3-flash, 28.6분, 도구 호출 206개)에서 나온 규칙을 짧게 더한다. 매 호출에 붙는 `GATE_BASE`에는 계획 형식 규칙만, 나머지는 단계 지침(`_PHASE_GUIDE`)에 둔다.
+
+- `GATE_BASE` 2번: 계획은 그것만 읽고 구현할 수 있게 쓴다. 쓸 데이터(상수, 표, 아스키 아트, 색 대응)는 본문에 넣는다. 대화에서 사용자가 정한 것은 요구사항에 `(사용자 결정: ...)`으로 적는다. 미결 질문, 결정 사항, 리뷰 기록은 게이트가 쓴다.
+- idle: `submit_plan` 전에 `task(subagent_type="explorer")`를 불러야 한다(안 부르면 거부). 실사용에서 탐색 호출 113개 뒤에야 이 거부를 받았다.
+- idle, planning: 승인 전 셸은 사실 확인용이다. 구현을 미리 만들어 보거나 상수만 출력하는 스크립트를 돌리지 않는다(승인 전 python 시험 실행 약 61개 중 절반이 그랬다). planning: 의견이 요구하는 내용은 요구사항이나 작업 순서 본문에 넣는다.
+- executing: 범위 밖으로 판정된 execute는 읽기 전용 샌드박스에서 돈다. `complete_plan`이 `test_command`를 직접 돌리니 바로 앞에 같은 명령을 돌리지 않는다. 코드를 바꾸지 않았으면 테스트를 다시 돌리지 않는다(pytest 32번 중 16번이 변경 없이 다시 돈 것이었다).
+- `REVIEWER_SYSTEM`: 게이트가 쓰는 절(미결 질문, 결정 사항, 리뷰 기록)에 쓰라고 하지 말고 요구사항이나 작업 순서 본문을 요구한다(실사용에서 두 회차 연속 "결정 사항에 적어라"를 내 상한까지 갔다). 비어 있는 절이나 계획 밖을 가리키는 참조, 이전 의견 반영 여부(반영할 수 없는 의견은 되풀이하지 않음), 입력 문서의 제약과 "하지 않을 것"의 대응, 테스트를 바뀌는 파일에 직접 닿는 것으로 좁히고 느린 전체 테스트는 이유와 함께 한 번만, 두 변형이 같은 값을 쓰면 두 쪽을 함께 단언하는지를 본다.
 
 `ASK_HUMAN_CRITERIA`는 `docs/DESIGN.md` 7장의 표를 그대로 옮긴다. `GATE_BASE`와 `REVIEWER_SYSTEM` 양쪽에 넣는다. 미결 질문마다 묻는 이유 한 줄, 선택지, 권하는 답을 붙이라고 지시한다.
 
@@ -1464,6 +1481,7 @@ def is_active() -> bool:
 | `cg.plan.approval` | 승인, 거부, 수정 요청 | 결과 |
 | `cg.gate.deny` | 게이트가 도구를 거부할 때 | 도구 이름, 사유 코드. level=WARNING |
 | `cg.scope.extend` | J4가 목록 밖 경로를 통과시킬 때 | 추가된 경로 |
+| `cg.gate.sandbox` | [F9] 승인 뒤 J4가 통과시키지 않은 `execute`를 샌드박스로 돌릴 때 | 도구 이름 |
 | `cg.memory.inject` | 요청 시작 때 | 후보 수, 선택된 이름 |
 | `cg.test.run` | `complete_plan`의 테스트 실행 | 명령, 종료 코드, 출력 끝부분. 실패면 level=ERROR |
 | `cg.result` | 작업이 끝났을 때 | 계획 상태, 요약 |
@@ -2116,7 +2134,7 @@ README에 함께 적는 것. 필요한 키와 없을 때의 동작, 게이트 �
 
 - 사람에게 되묻는 판단은 모델에 맡겼다. 놓친 질문은 사람이 승인할 때 잡아야 한다.
 - 계획이 `complete_plan` 없이 남으면 phase가 `executing`으로 유지된다. 이후 요청의 쓰기는 전부 J4에 기댄다. 사용자가 계획을 닫을 명령은 아직 없다.
-- 보호 폴더에 대한 `execute` 검사는 문자열 대조다. 경로를 변수로 조립하는 명령은 놓칠 수 있다. 승인 전에는 읽기 전용 명령만 통과하므로 그때는 안전하다. 승인 뒤에는 J4가 남은 방어다.
+- 보호 폴더에 대한 `execute` 검사는 문자열 대조다. 경로를 변수로 조립하는 명령은 놓칠 수 있다. 승인 전에는 읽기 전용 명령만 통과하므로 그때는 안전하다. 승인 뒤에는 J4가 남은 방어다. [F9] 샌드박스를 쓸 수 있으면 언급이 잡힌 명령은 샌드박스에서 돌아 보호 폴더에 쓰지 못한다. 놓친 명령은 여전히 J4가 방어다.
 - `MemoryStore`의 쓰기와 `rebuild_index`는 잠금이 없다. 두 프로세스(서버의 `complete_plan`, 클라이언트의 `/remember`)가 동시에 저장하면 색인이 한쪽 기억을 빠뜨릴 수 있다. 다음 저장이 색인을 다시 만들면 맞춰진다. 기억 파일 자체는 원자적으로 쓴다.
 - J6는 요청문만 보고 기억을 고른다(계획 진행 중이면 계획의 요구사항도). 짧은 요청에서는 관련 기억을 놓칠 수 있다. 색인이 항상 주입되므로 모델이 직접 열 수 있다.
 - Langfuse 키가 없으면 평가 4번 항목과 자기 개선 전체가 동작하지 않는다.
