@@ -52,6 +52,84 @@ _LANGSMITH_UTM_SOURCE: Final[str] = "deepagents-code"
 _THREAD_COPY_LABEL: Final[str] = "Thread ID"
 """Label used to word the toast shown after copying the thread ID."""
 
+_MASCOT_UNICODE: Final[tuple[str, ...]] = (
+    "  ▄▄   ▄▄",
+    "  ▀██▄██▀",
+    "     █",
+    "  ▄█████▄",
+    " ███ █ ███",
+    " █████████",
+    "  ▀▀   ▀▀",
+)
+"""coco the sprout, the mascot still frame for terminals with full Unicode.
+
+Seven rows, at most 10 cells wide, from the mascot design notes: two leaf
+tips over a closed dome, a stem, a rounded body with two blank-cell eyes
+(the terminal background shows through), and two feet."""
+
+_MASCOT_ASCII: Final[tuple[str, ...]] = (
+    "  ^^   ^^",
+    "  \\#####/",
+    "     |",
+    "  #######",
+    " ### # ###",
+    " #########",
+    "  ==   ==",
+)
+"""coco for ASCII charset mode, mirroring the Unicode sprite's columns.
+
+Same silhouette in 7-bit ASCII: leaf tips, a closed dome, the stem, the
+body with blank-cell eyes (space nose block between them), and two feet.
+Every row stays within the 10-cell board width so the right column lines
+up identically under both boards."""
+
+_MASCOT_LEAF_ROWS: Final[int] = 3
+"""Mascot rows (0-based, exclusive) colored as leaf/stem."""
+
+_MASCOT_FOOT_ROW: Final[int] = 6
+"""Mascot row index colored as feet; rows in between are the body."""
+
+_MASCOT_WIDTH: Final[int] = 10
+"""Display width of the mascot board; the right column starts after it."""
+
+_MASCOT_COLUMN_GAP: Final[int] = 3
+"""Blank cells between the mascot board and the right column."""
+
+_MASCOT_HEIGHT: Final[int] = len(_MASCOT_UNICODE)
+"""Mascot board height; the banner is at least this many lines tall."""
+
+
+def _mascot_lines(*, ansi: bool) -> list[tuple[str, str | TStyle]]:
+    """Build the mascot board as one `(text, style)` span per row.
+
+    ANSI terminal themes own the palette, so rows use named markup that maps
+    onto whatever greens the terminal defines: the leaf/stem and feet share
+    `green` (their hexes `#008700`/`#005f00` both map to plain green), and
+    the body adds bold (`bold green`) for its lighter `#87d75f`. Every other
+    theme parses the mascot design's exact hexes.
+
+    Args:
+        ansi: Whether the active theme is an ANSI terminal theme.
+
+    Returns:
+        Seven `(row, style)` pairs, one per mascot row.
+    """
+    lines: list[tuple[str, str | TStyle]] = []
+    for index, text in enumerate(_MASCOT_UNICODE):
+        in_body = _MASCOT_LEAF_ROWS <= index < _MASCOT_FOOT_ROW
+        if ansi:
+            style: str | TStyle = "bold green" if in_body else "green"
+        else:
+            if index == _MASCOT_FOOT_ROW:
+                hex_color = "#005f00"
+            elif in_body:
+                hex_color = "#87d75f"
+            else:
+                hex_color = "#008700"
+            style = TStyle(foreground=TColor.parse(hex_color))
+        lines.append((text, style))
+    return lines
+
 
 def _langsmith_project_link(project_url: str) -> str:
     """Append the Deep Agents source tag to a LangSmith project URL.
@@ -445,19 +523,31 @@ class WelcomeBanner(Static):
     def _build_banner(self) -> Content:
         """Build the banner content.
 
+        The mascot board sits on the left and the text column on the right,
+        side by side. In charset ASCII mode the board switches to a 7-bit
+        ASCII sprite; under ANSI terminal themes its rows use named markup
+        instead of parsed hex colors.
+
         Returns:
-            Content with the title, optional version, and any applicable header
-            tags (`(debug enabled)` when debug is on; `(experimental)` when
-            experimental mode is on; `(local)` for editable
-            installs when the version is shown), followed by any applicable rows
-            in order: model (when `SPLASH_SHOW_MODEL`), directory (when
-            `SPLASH_SHOW_CWD`), tracing and replica (each clickable once its URL
-            resolves), thread ID (debug only; click-to-copy plus a trace link
-            once the project URL resolves), MCP tool count, MCP server
-            warnings, and the editable-install path.
+            Content with the mascot on the left of the title line and any
+            applicable header tags (`(debug enabled)` when debug is on;
+            `(experimental)` when experimental mode is on; `(local)` for
+            editable installs when the version is shown), followed by any
+            applicable rows in order: model (when `SPLASH_SHOW_MODEL`),
+            directory (when `SPLASH_SHOW_CWD`), tracing and replica (each
+            clickable once its URL resolves), thread ID (debug only;
+            click-to-copy plus a trace link once the project URL resolves),
+            MCP tool count, MCP server warnings, and the editable-install
+            path. Rows past the mascot's height continue at column 0 without
+            a board prefix; when the text column is shorter, the remaining
+            mascot rows render alone. The banner is therefore
+            `max(_MASCOT_HEIGHT, right-column lines)` lines tall.
         """
         colors = theme.get_theme_colors(self)
         ansi = self.app.theme in _ANSI_THEMES
+        ascii_mode = is_ascii_mode()
+        mascot_lines = _mascot_lines(ansi=ansi)
+        board = _MASCOT_ASCII if ascii_mode else _MASCOT_UNICODE
         accent: str | TStyle = "bold" if ansi else colors.primary
         title_style: str | TStyle = (
             "bold"
@@ -466,28 +556,28 @@ class WelcomeBanner(Static):
         )
         warn_color: str = "bold yellow" if ansi else colors.warning
 
-        parts: list[str | tuple[str, str | TStyle]] = [
+        title: list[str | tuple[str, str | TStyle]] = [
             (f"{get_glyphs().cursor} ", title_style),
             ("dcode", "bold"),
         ]
         if not self._hide_version:
-            parts.append((f"  v{self._version}", "dim"))
+            title.append((f"  v{self._version}", "dim"))
         if self._debug_enabled:
-            parts.append(
+            title.append(
                 (
                     " (debug enabled)",
                     _debug_tag_style(ansi=ansi, colors=colors),
                 )
             )
         if self._experimental_enabled:
-            parts.append(
+            title.append(
                 (
                     " (experimental)",
                     _experimental_tag_style(ansi=ansi, colors=colors),
                 )
             )
         if not self._hide_version and _is_editable_install():
-            parts.append((" (local)", _local_tag_style(ansi=ansi, colors=colors)))
+            title.append((" (local)", _local_tag_style(ansi=ansi, colors=colors)))
 
         # Row labels share a common column width so values stay aligned; the
         # longest label ("directory:") needs 11 columns including its space.
@@ -563,8 +653,8 @@ class WelcomeBanner(Static):
             )
 
         for index, row in enumerate(rows):
-            parts.append("\n\n" if index == 0 else "\n")
-            parts.extend(row)
+            title.append("\n\n" if index == 0 else "\n")
+            title.extend(row)
 
         # MCP server warnings — actionable alerts not shown elsewhere in the banner.
         warning_lines: list[list[tuple[str, str | TStyle]]] = []
@@ -613,7 +703,33 @@ class WelcomeBanner(Static):
             )
 
         for line in warning_lines:
-            parts.append("\n")
-            parts.extend(line)
+            title.append("\n")
+            title.extend(line)
+
+        # Split the title+rows parts back into logical lines so the mascot
+        # board can be spliced in front of the first `_MASCOT_HEIGHT` of them.
+        right_lines: list[list[str | tuple[str, str | TStyle]]] = [[]]
+        for part in title:
+            if isinstance(part, str) and "\n" in part:
+                for offset, chunk in enumerate(part.split("\n")):
+                    if offset:
+                        right_lines.append([])
+                    if chunk:
+                        right_lines[-1].append(chunk)
+            else:
+                right_lines[-1].append(part)
+
+        parts: list[str | tuple[str, str | TStyle]] = []
+        for index in range(max(_MASCOT_HEIGHT, len(right_lines))):
+            if index:
+                parts.append("\n")
+            if index < _MASCOT_HEIGHT:
+                row_text, row_style = mascot_lines[index]
+                padding = " " * (
+                    max(_MASCOT_WIDTH - len(row_text), 0) + _MASCOT_COLUMN_GAP
+                )
+                parts.extend(((board[index], row_style), padding))
+            if index < len(right_lines):
+                parts.extend(right_lines[index])
 
         return Content.assemble(*parts)

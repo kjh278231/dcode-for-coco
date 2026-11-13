@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from textual.app import App, ComposeResult
 from textual.color import Color as TColor
+from textual.content import Content
 from textual.style import Style as TStyle
 
 from deepagents_code import clipboard as clipboard_module
@@ -15,12 +16,12 @@ from deepagents_code._env_vars import (
     SPLASH_SHOW_MODEL,
 )
 from deepagents_code._version import __version__
+from deepagents_code.config import get_glyphs
 from deepagents_code.tui.widgets import welcome as welcome_module
 from deepagents_code.tui.widgets.welcome import WelcomeBanner, _local_tag_style
 
 if TYPE_CHECKING:
     import pytest
-    from textual.content import Content
 
 _EDITABLE = "deepagents_code.tui.widgets.welcome._is_editable_install"
 _PROJECT_NAME = "deepagents_code.tui.widgets.welcome.get_langsmith_project_name"
@@ -69,6 +70,27 @@ def _style_covering(content: Content, needle: str) -> TStyle:
         The `TStyle` of the one span covering `needle`.
     """
     style = _raw_style_covering(content, needle)
+    assert isinstance(style, TStyle)
+    return style
+
+
+def _last_style_covering(content: Content, needle: str) -> TStyle:
+    """Return the `TStyle` of the last span whose text contains `needle`.
+
+    Board rows can share needle text with other board rows (e.g. the ASCII
+    body's `#######` also appears in the solid row), so callers pick the
+    intended occurrence by position instead of assuming uniqueness.
+
+    Args:
+        content: Assembled banner content to inspect.
+        needle: Substring identifying the span whose style to return.
+
+    Returns:
+        The `TStyle` of the last span covering `needle`.
+    """
+    spans = [s for s in content.spans if needle in content.plain[s.start : s.end]]
+    assert spans, f"expected a span covering {needle!r}"
+    style = spans[-1].style
     assert isinstance(style, TStyle)
     return style
 
@@ -312,6 +334,205 @@ class TestBorder:
                 welcome_module.theme.get_theme_colors(banner).primary
             )
             assert banner.styles.border_top[1] != original_color
+
+
+class TestMascot:
+    """Tests for the coco mascot board merged into the banner."""
+
+    _BLOCK_CHARS = "▄▀█"
+    _ROW_NEEDLES = (
+        "▄▄   ▄▄",
+        "▀██▄██▀",
+        "     █",
+        "▄█████▄",
+        "███ █ ███",
+        "█████████",
+        "▀▀   ▀▀",
+    )
+    _ANSI_ROW_STYLES = (
+        "green",
+        "green",
+        "green",
+        "bold green",
+        "bold green",
+        "bold green",
+        "green",
+    )
+    _ROW_HEXS = (
+        "#008700",
+        "#008700",
+        "#008700",
+        "#87d75f",
+        "#87d75f",
+        "#87d75f",
+        "#005f00",
+    )
+
+    def test_unicode_board_renders_with_right_column(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The board sits left of the title column in Unicode mode."""
+        monkeypatch.setattr(welcome_module, "is_ascii_mode", lambda: False)
+        banner = _make_banner(show_model=False)
+        content = banner._build_banner()
+        lines = content.plain.split("\n")
+        # Board rows share the title line and extend below it.
+        assert welcome_module._MASCOT_UNICODE[0] in lines[0]
+        assert "dcode" in lines[0]
+        assert sum(ch in self._BLOCK_CHARS for ch in content.plain) > 0
+        # Title starts after the board width plus the column gap plus the
+        # styled cursor prefix.
+        title_column = (
+            welcome_module._MASCOT_WIDTH
+            + welcome_module._MASCOT_COLUMN_GAP
+            + len(f"{get_glyphs().cursor} ")
+        )
+        assert lines[0].index("dcode") == title_column
+        # Default banner has one right line, so the board fills the height.
+        assert len(lines) == welcome_module._MASCOT_HEIGHT
+        assert lines[6].rstrip() == welcome_module._MASCOT_UNICODE[6]
+
+    def test_unicode_board_rows_carry_design_hexes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Each board row's span foreground matches the mascot design notes."""
+        monkeypatch.setattr(welcome_module, "is_ascii_mode", lambda: False)
+        content = _make_banner(show_model=False)._build_banner()
+        for needle, hex_color in zip(self._ROW_NEEDLES, self._ROW_HEXS, strict=True):
+            style = _style_covering(content, needle)
+            assert style.foreground == TColor.parse(hex_color), needle
+
+    def test_ansi_theme_rows_use_named_markup(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Under ANSI themes board rows use raw named markup, not hexes.
+
+        `_build_banner` assembles at construction time, so the ANSI theme is
+        set on the active app before the banner exists and the first build
+        takes the ANSI branch.
+        """
+        monkeypatch.setattr(welcome_module, "is_ascii_mode", lambda: False)
+        from textual._context import active_app
+
+        app = App()
+        app.theme = "ansi-dark"
+        token = active_app.set(app)
+        try:
+            # `_build_banner` assembles at construction time AND again on every
+            # theme/update path; build inside the context so both share the
+            # ANSI branch.
+            banner = _make_banner(show_model=False)
+            content = banner._build_banner()
+        finally:
+            active_app.reset(token)
+        for needle, markup in zip(
+            self._ROW_NEEDLES, self._ANSI_ROW_STYLES, strict=True
+        ):
+            style = _raw_style_covering(content, needle)
+            assert style == markup, needle
+
+    def test_ascii_mode_renders_ascii_board(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """ASCII mode swaps the block-character board for the 7-bit sprite."""
+        monkeypatch.setattr(welcome_module, "is_ascii_mode", lambda: True)
+        banner = _make_banner(show_model=False)
+        content = banner._build_banner()
+        plain = content.plain
+        assert sum(ch in self._BLOCK_CHARS for ch in plain) == 0
+        # The board itself is 7-bit ASCII; the title cursor glyph stays Unicode
+        # (glyph selection is orthogonal to the charset mode).
+        board_text = "".join(welcome_module._MASCOT_ASCII)
+        assert board_text.isascii()
+        assert all(row.isascii() for row in welcome_module._MASCOT_ASCII)
+        assert welcome_module._MASCOT_ASCII[0] in plain.split("\n")[0]
+        # Right column alignment mirrors the Unicode layout with the ASCII
+        # board's own width.
+        ascii_width = max(
+            Content.from_text(row).cell_length for row in welcome_module._MASCOT_ASCII
+        )
+        title_column = (
+            ascii_width
+            + welcome_module._MASCOT_COLUMN_GAP
+            + len(f"{get_glyphs().cursor} ")
+        )
+        assert plain.split("\n")[0].index("dcode") == title_column
+
+    def test_ascii_board_rows_use_same_color_zones(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The ASCII sprite reuses the Unicode board's three color zones."""
+        monkeypatch.setattr(welcome_module, "is_ascii_mode", lambda: True)
+        content = _make_banner(show_model=False)._build_banner()
+        for index, (row_text, hex_color) in enumerate(
+            zip(welcome_module._MASCOT_ASCII, self._ROW_HEXS, strict=True)
+        ):
+            style = _last_style_covering(content, row_text.strip())
+            assert style.foreground == TColor.parse(hex_color), index
+
+    def test_boards_fit_the_board_width(self) -> None:
+        """Both boards stay within the 10-cell width the layout pads against."""
+        for row in welcome_module._MASCOT_UNICODE:
+            assert Content.from_text(row).cell_length <= welcome_module._MASCOT_WIDTH
+        for row in welcome_module._MASCOT_ASCII:
+            assert Content.from_text(row).cell_length <= welcome_module._MASCOT_WIDTH
+            assert row.isascii()
+
+    def test_rows_beyond_the_board_continue_at_column_zero(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Text past the board's height flows from column 0 with no prefix."""
+        monkeypatch.setattr(welcome_module, "is_ascii_mode", lambda: False)
+        content = _make_banner(
+            model_provider="anthropic",
+            model_name="claude-opus-4-8",
+            cwd="/work/project",
+            thread_id="abc-123",
+            mcp_tool_count=3,
+            project_name="proj",
+            replica_project="repl",
+            project_urls={"proj": "https://x/p1", "repl": "https://x/p2"},
+            show_model=True,
+            show_cwd=True,
+            env={
+                DEBUG: "1",
+                "DEEPAGENTS_CODE_SPLASH_SHOW_CWD": "1",
+            },
+        )._build_banner()
+        lines = content.plain.split("\n")
+        # title + blank + model + directory + tracing + replica + thread + mcp
+        assert len(lines) == 8
+        assert lines[7].startswith("mcp:")
+
+    def test_board_height_extends_past_short_right_column(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """With a short right column the banner stays as tall as the board."""
+        monkeypatch.setattr(welcome_module, "is_ascii_mode", lambda: False)
+        content = _make_banner(show_model=False)._build_banner()
+        lines = content.plain.split("\n")
+        assert len(lines) == welcome_module._MASCOT_HEIGHT
+        # The surplus rows carry board content with no right-column text.
+        assert lines[5].rstrip() == welcome_module._MASCOT_UNICODE[5]
+        assert lines[6].rstrip() == welcome_module._MASCOT_UNICODE[6]
+
+    def test_thread_trace_link_survives_the_merge(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The trace link span still carries its URL after board merging."""
+        monkeypatch.setattr(welcome_module, "is_ascii_mode", lambda: False)
+        content = _make_banner(
+            thread_id="abc-123",
+            project_name="proj",
+            project_urls={"proj": "https://smith.langchain.com/o/org/projects/p/p1"},
+            env={DEBUG: "1"},
+        )._build_banner()
+        assert "(open in langsmith)" in content.plain
+        link = _style_covering(content, "(open in langsmith)").link
+        assert link == (
+            "https://smith.langchain.com/o/org/projects/p/p1/t/abc-123"
+            "?utm_source=deepagents-code"
+        )
 
 
 def _click_offset(banner: WelcomeBanner, needle: str) -> tuple[int, int]:
