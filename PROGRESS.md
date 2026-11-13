@@ -330,6 +330,28 @@
   - 시도했고 이미 거부되던 것: `>/dev/null;>x`, `>/dev/null&&>x`, `1>/dev/null>x`, `>/dev/null||x`, `2>/dev/null|&touch x`, `;;`, `-C<경로>`, `-C=`, `-C 루트 -C 다른곳`, `-C 루트 --git-dir=`, `-C 루트/링크/..`(실제 경로로 풀어 루트가 아님), `find . '-ex'ec`, `find . -name "-exec"`, `find . -fls=x`, `find … # -exec`. 허용되지만 무해: `-C 루트/.`, `-C 루트/`, `find -D exec`, `find ~`, 주석 `#`(셸이 덜 실행).
   - `check.sh unit` 413 passed(409 + 4), `check.sh lint` 통과.
 
+## F6. 계획 전 git 판정 확장 — 완료 (2026-11-13)
+
+릴리스본 `dcode-a`를 `~/workspace/deepagents-coco`에서 쓰다가 읽기 git이 `no_approved_plan`으로 거부됐다: `git -C <루트> status -sb`, `merge-base main HEAD`, `merge-base --is-ancestor main HEAD`, `branch --contains main --list coco-mascot`, `branch --contains e3a789816`, `log --oneline --first-parent -8 | cat`. 거부 문장의 "읽기 git"이 막연해 모델이 git 형태만 바꿔 다시 시도했다.
+
+- 묶음(O22): parse-options 하위 명령에서 `-sb`를 모든 글자가 값 없는 허용 옵션일 때만 `-s -b`로 펼친다(`policy._expand_git_bundles`).
+- 추가 표(O23): `policy._EXTRA_GIT_READ_OPTIONS`에 branch(목록만), merge-base, rev-list, blame, ls-tree, cat-file(`-e -p -t -s`), describe, show-ref. 업스트림이 거부할 때만 보고, 원문 검사(glob, `{`, `$`, 구분자, `-C` 루트)와 업스트림 `_git_option_allowed`, `_command_paths_stay_in_worktree`는 그대로 쓴다. branch는 목록 옵션이 있을 때만 위치 인자(`--` 뒤 포함)를 받는다. 뺀 것: cat-file `--batch*`·`--textconv`·`--filters`, describe `--dirty`·`--broken`, show-ref `--exclude-existing`, blame `--contents`·`-S`·`--ignore-revs-file`·`-C`·`-M`, branch의 쓰는 옵션 전부와 `-l`의 목록 취급.
+- `log --first-parent`(O24): 이미 업스트림에 있고 관찰 명령이 F5 상태에서 True라 코드 변경 없음. 허용 테스트에만 넣었다.
+- 거부 문장(O25): `GIT_READ_SUBCOMMANDS`(두 표의 합)로 하위 명령 14개를 이름으로 적고 "branch는 목록만"을 붙였다.
+- 검사:
+  - `check.sh unit` 528 passed(F5 뒤 413 + 새 115: `test_f6_read_only_git_allowed` 32, `test_f6_lookalikes_denied` 81, `test_f6_allowed_git_reads_only_in_real_repo` 1, `test_f6_deny_text_names_every_git_subcommand` 1).
+  - `check.sh lint` 통과. 업스트림 파일은 안 고쳐 baseline은 안 돌렸다.
+  - 실제 저장소 테스트: 허용 32개를 임시 저장소에서 `sh -c`로 돌려 모두 성공(merge-base 둘은 종료 코드만 예외)하고 `unknown` 오류가 없고, 매번 ref·HEAD·`.git/config`·작업 트리 파일 목록이 그대로다(`.git`의 나머지는 status의 index 갱신 때문에 보지 않는다). 거부한 `git branch -v made1`, `--abbrev 7`, `-- made2`는 실제로 ref를 만든다.
+  - 변이 10개 모두 테스트가 실패했다: branch 목록 규칙 제거(14건), `--` 뒤 위치 인자 무시(2), 묶음 글자 검사 제거(2), `-v`를 목록 옵션으로(2), cat-file `--batch`·`--textconv` 허용(2), 경로 검사 제거(2), `--abbrev`를 값 옵션으로 옮김(2), 추가 표 연결 끊기(29), describe `--dirty` 허용(1), log·diff 묶음 펼치기(2). 처음의 `--abbrev` 변이(값 없는 쪽에 둔 채 값 쪽에도 더함)는 통과했다. `_git_option_allowed`가 값 없는 쪽을 먼저 봐서 동작이 같은 변이였고, 옮기는 변이로 다시 했다. 모두 되돌린 것을 diff로 확인했다.
+- 명세와 다르게 한 점 (SPEC 3.4 의사 코드 3)과 이유·검사 문단, 3.7 `no_approved_plan` 문단에 `[F6]`로 반영함): 위 넷.
+- 남는 위험: branch `--format=%(signature)`, `--sort=signature`는 `gpg.program`을 돌린다. blame은 textconv를 돌린다. 둘 다 임시 저장소에서 확인했고, 업스트림이 이미 받는 `git log --format=%G?`, `git show`, `git log -p`와 같은 신뢰(루트 저장소와 사용자 설정)다.
+- 확인 못 한 것: 실제 모델이 새 거부 문장으로 재시도를 멈추는지(가짜 모델로도 안 봄). `log … | cat`이 실사용에서 왜 거부됐는지(체크포인트 1GB를 문자열로 찾았지만 압축돼 있어 못 찾음). git 2.43 밖 버전의 옵션 차이(`-l`만 따로 다룸). auto 모드에서는 이 명령들이 결정적 허용 대신 분류기로 간다(업스트림 표 그대로).
+- 리뷰 뒤 수정:
+  - `#` 주석 우회(F6에서 생김, HEAD는 branch를 안 받았다): sh는 `#` 뒤를 버리는데 shlex.split은 토큰으로 남겨 `git branch newb # --list`가 True였고 임시 저장소에서 실제로 `refs/heads/newb`를 만들었다. `cd <루트> && …`, `git -C <루트> …` 형태도 같았다. `_git_read_only`에서 `shlex.split(c) != shlex.split(c, comments=True)`이면 거부한다(따옴표 안 `#`은 그대로 받는다, 단어 안 `a#b`는 보수적으로 거부).
+  - `--` 뒤 옵션 모양 토큰(F6에서 생김): `_extra_git_allowed`가 `--` 뒤를 보지 않아 `git describe --contains -- --stdin`이 True였고 name-rev가 stdin을 읽었다(실행해서 경고와 stdin 내용 출력 확인). `describe -- --dirty`, `rev-list HEAD -- --stdin`, `cat-file -- --batch`, `blame -- --contents`도 True였다(실행은 오류로 끝남). 추가 표에서는 `--` 뒤의 `-` 토큰을 거부한다. `git branch --list -- -d x`(목록이라 무해)도 같이 거부된다.
+  - 우회 아님으로 확인: 후보 72개 중 True 28개를 `main`, 태그를 만든 임시 저장소에서 다시 `sh -c`로 돌려 ref 그대로, `.git` 아래 새로 쓴 파일 없음(종료 코드 0 아닌 6개는 git 사용법 오류). git 2.43은 긴 옵션 접두어를 받지만(`git branch --delet zz`가 삭제로 동작) 표는 정확히 맞춰 접두어는 거부된다. parse-options 하위 명령(branch, describe, cat-file, ls-tree, merge-base, show-ref)의 허용 긴 옵션은 모두 `--git-completion-helper-all`의 정확한 이름이다. rev-list와 blame의 `--date`는 revision 파서가 정확히 맞춘다. branch에서 git이 값을 먹는 옵션(`--contains`, `--no-contains`, `--merged`, `--no-merged`, `--points-at`)은 모두 목록 옵션이라 값 소비로 목록 모드가 풀리지 않는다(`--no-contains HEAD n1`, `--points-at HEAD n3` 실제로 안 만듦). `\r`, `\v`, `\f`는 이미 거부, `\t`는 sh도 나눠 같다.
+  - must-deny 32건(접두어 21, `#` 4, `--` 뒤 7)과 실제 저장소 테스트의 "실제로 만든다" 목록에 `git branch made3 # --list`를 더했다. `check.sh unit` 560 passed(528 + 32), `check.sh lint` 통과.
+
 ## M9. 보정과 README — 다음
 
 먼저 볼 것: `FOLLOWUPS.md`(F2의 남은 일: auto 분류기를 건너뛰는 업스트림 수정 검토. F4: 업스트림 읽기 전용 판정에 남은 우회, F5에서 찾은 `{`, `$@` 포함). M8의 함정 과제가 T8용 신호를 만들지 못한 문제도 M8 절에 있다.

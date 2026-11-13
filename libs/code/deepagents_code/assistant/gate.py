@@ -50,6 +50,7 @@ from deepagents_code.assistant.plan import (
     record_answers,
 )
 from deepagents_code.assistant.policy import (
+    GIT_READ_SUBCOMMANDS,
     classify_call,
     is_read_only_shell,
     normalize_tool_path,
@@ -77,8 +78,10 @@ REQUEST_TEXT_MAX = 4000
 
 _DENY_TEXT = {
     # [F1] 다음 행동을 알려 줘서 셸 명령만 바꿔 가며 다시 시도하지 않게 한다
+    # [F6] git 하위 명령은 판정 표에서 만든다. branch는 목록만 받는다
     "no_approved_plan": "승인된 계획이 없다. 승인 전 execute는 읽기 전용 명령"
-    "(ls, cat, head, grep, echo, 읽기 git과 그 조합)만 통과한다. 프로그램 실행과 "
+    f"(ls, cat, head, grep, echo, 정해진 옵션의 git {', '.join(GIT_READ_SUBCOMMANDS)}."
+    " branch는 목록만)과 그 조합만 통과한다. 프로그램 실행과 "
     "쓰기는 통과하지 않으니 셸 명령을 바꿔 다시 시도하지 마라. 읽기는 read_file, "
     'glob, grep이나 task(subagent_type="explorer")로 하라. 코드를 바꾸려면 먼저 '
     "탐색하고 submit_plan으로 계획을 내서 승인을 받아라.",

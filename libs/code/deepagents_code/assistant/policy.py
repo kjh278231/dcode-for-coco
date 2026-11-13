@@ -20,7 +20,13 @@ from deepagents_code.assistant.options import (
 )
 
 # 읽기 전용 git 판정은 auto mode와 같은 기준을 써야 해서 비공개 함수를 가져온다.
-from deepagents_code.auto_mode import _SHELL_CONTROL_RE, _fixed_repo_command_allowed
+from deepagents_code.auto_mode import (
+    _GIT_READ_OPTIONS,
+    _SHELL_CONTROL_RE,
+    _command_paths_stay_in_worktree,
+    _fixed_repo_command_allowed,
+    _git_option_allowed,
+)
 from deepagents_code.config import (
     RECOMMENDED_SAFE_SHELL_COMMANDS,
     contains_dangerous_patterns,
@@ -56,6 +62,104 @@ _GLOB_CHARS = frozenset("*?[")
 # [F5] 중괄호 펼침(`{--output=f,HEAD}`)과 `$@`, `$1`도 옵션을 만든다
 # (업스트림은 `$` 뒤 글자만 막는다)
 _GIT_UNSAFE_CHARS = _GLOB_CHARS | {"{", "$"}
+# [F6] 업스트림 표에 없는 읽기 git 하위 명령. 모양은 업스트림 _GIT_READ_OPTIONS와
+# 같다(값 없는 옵션, 값을 받는 옵션). git 2.43 `git <명령> -h`로 이름을 맞췄다.
+# 값이 선택인 옵션(`--abbrev[=n]` 등)은 값 없는 쪽에 둔다. 값 쪽에 두면
+# `git branch --abbrev 7`의 7을 값으로 먹지만 git은 브랜치 7을 만든다
+_EXTRA_GIT_READ_OPTIONS: dict[str, tuple[frozenset[str], frozenset[str]]] = {
+    # 브랜치를 만들거나 바꾸는 옵션은 없다. 이름(위치 인자)은 목록 모드에서만 받는다
+    "branch": (
+        frozenset(
+            {
+                *("--list", "-l", "-a", "--all", "-r", "--remotes", "-v"),
+                *("--verbose", "-q", "--quiet", "--show-current", "-i"),
+                *("--ignore-case", "--color", "--no-color", "--abbrev"),
+                *("--contains", "--no-contains", "--merged", "--no-merged"),
+                "--points-at",
+            }
+        ),
+        frozenset({"--sort", "--format"}),
+    ),
+    # --contains는 git name-rev를 돌린다(읽기). --dirty, --broken은 index를 고친다
+    "describe": (
+        frozenset(
+            {
+                *("--contains", "--all", "--tags", "--long", "--first-parent"),
+                *("--abbrev", "--exact-match", "--always"),
+            }
+        ),
+        frozenset({"--candidates", "--match", "--exclude"}),
+    ),
+    # --batch*는 stdin을 읽고, --textconv, --filters는 프로그램을 돌린다
+    "cat-file": (frozenset({"-e", "-p", "-t", "-s"}), frozenset()),
+    "ls-tree": (
+        frozenset(
+            {
+                *("-d", "-r", "-t", "-z", "-l", "--long", "--name-only"),
+                *("--name-status", "--object-only", "--full-name", "--full-tree"),
+                "--abbrev",
+            }
+        ),
+        frozenset({"--format"}),
+    ),
+    "merge-base": (
+        frozenset(
+            {"-a", "--all", "--octopus", "--independent", "--is-ancestor"}
+            | {"--fork-point"}
+        ),
+        frozenset(),
+    ),
+    # --exclude-existing은 stdin을 읽는다. -d는 삭제가 아니라 역참조다
+    "show-ref": (
+        frozenset(
+            {
+                *("--tags", "--heads", "--exists", "--verify", "--head", "-d"),
+                *("--dereference", "--hash", "--abbrev", "-q", "--quiet"),
+            }
+        ),
+        frozenset(),
+    ),
+    # --contents, -S, --ignore-revs-file은 파일을 읽고, -C, -M은 값이 붙는다.
+    # textconv는 git show, git log -p처럼 저장소 설정에 있으면 돈다
+    "blame": (
+        frozenset(
+            {
+                *("-b", "--root", "-f", "--show-name", "-n", "--show-number"),
+                *("-p", "--porcelain", "--line-porcelain", "-c", "-t", "-l"),
+                *("-s", "-e", "--show-email", "-w", "--minimal"),
+            }
+        ),
+        frozenset({"-L", "--date"}),
+    ),
+    # 리비전 파서다. --output 같은 diff 옵션은 표에 없어 거부된다
+    "rev-list": (
+        frozenset(
+            {
+                *("--count", "--all", "--first-parent", "--merges", "--no-merges"),
+                *("--reverse", "--topo-order", "--date-order", "--parents"),
+                *("--children", "--left-right", "--ancestry-path"),
+                *("--abbrev-commit", "--oneline"),
+            }
+        ),
+        frozenset(
+            {"--max-count", "-n", "--since", "--until", "--after", "--before"}
+            | {"--author", "--grep", "--skip"}
+        ),
+    ),
+}
+# [F6] `git branch <이름>`은 브랜치를 만든다. 이 옵션이 있을 때만 이름을 패턴으로 본다
+_GIT_BRANCH_LIST_OPTIONS = frozenset(
+    {"--list", "--contains", "--no-contains", "--merged", "--no-merged", "--points-at"}
+)
+# [F6] parse-options를 쓰는 하위 명령만 `-sb`를 `-s -b`로 읽는다. log, diff, show,
+# rev-list, rev-parse는 묶음을 받지 않아 펼치지 않는다
+_GIT_BUNDLE_SUBCOMMANDS = frozenset(
+    {"status", "ls-files", "branch", "describe", "cat-file", "ls-tree"}
+    | {"merge-base", "show-ref", "blame"}
+)
+_GIT_BUNDLE_RE = re.compile(r"-[A-Za-z]{2,}")
+# 거부 문장에 쓴다. 표에서 만들어 어긋나지 않는다
+GIT_READ_SUBCOMMANDS = tuple(sorted({*_GIT_READ_OPTIONS, *_EXTRA_GIT_READ_OPTIONS}))
 _PROTECTED_NAMES = "|".join(re.escape(d.split("/", 1)[1]) for d in PROTECTED_DIRS)
 # 보호 폴더 자체, 또는 그 상위인 .deepagents 전체(뒤에 구분자·끝·glob)를 잡는다.
 _PROTECTED_MENTION_RE = re.compile(
@@ -161,8 +265,12 @@ def _git_read_only(command: str, project_root: Path) -> bool:
     if not _GIT_UNSAFE_CHARS.isdisjoint(command) or _SHELL_CONTROL_RE.search(command):
         return False
     # [F5] `git -C <루트>`는 루트로 간 `cd` 뒤의 git과 같다. 떼고 업스트림에 넘긴다
+    # [F6 리뷰] sh는 `#` 뒤를 주석으로 버리지만 shlex.split은 토큰으로 남긴다.
+    # `git branch x # --list`가 목록 옵션이 있는 척해 브랜치를 만든다
     try:
         parts = shlex.split(command)
+        if parts != shlex.split(command, comments=True):
+            return False
     except ValueError:
         return False
     if (
@@ -170,8 +278,85 @@ def _git_read_only(command: str, project_root: Path) -> bool:
         and len(parts) > 2  # noqa: PLR2004  # git -C <경로>
         and _abs_dir(parts[2]) == project_root.resolve()
     ):
-        command = shlex.join(["git", *parts[3:]])
-    return _fixed_repo_command_allowed(command, project_root)
+        parts = ["git", *parts[3:]]
+    parts = _expand_git_bundles(parts)
+    return _fixed_repo_command_allowed(
+        shlex.join(parts), project_root
+    ) or _extra_git_allowed(parts, project_root)
+
+
+def _expand_git_bundles(parts: list[str]) -> list[str]:
+    """[F6] `-sb`를 글자마다 값 없는 허용 옵션일 때만 `-s -b`로 펼친다.
+
+    한 글자라도 아니면 그대로 둬서 옵션 검사가 거부한다. `--` 뒤는 펼치지 않는다.
+
+    Returns:
+        펼친 토큰 목록.
+    """
+    if (
+        len(parts) < 2  # noqa: PLR2004  # git <하위 명령>
+        or parts[0] != "git"
+        or parts[1] not in _GIT_BUNDLE_SUBCOMMANDS
+    ):
+        return parts
+    flags = (_GIT_READ_OPTIONS.get(parts[1]) or _EXTRA_GIT_READ_OPTIONS[parts[1]])[0]
+    out = parts[:2]
+    for i, arg in enumerate(parts[2:], start=2):
+        if arg == "--":
+            return out + parts[i:]
+        letters = [f"-{c}" for c in arg[1:]]
+        if _GIT_BUNDLE_RE.fullmatch(arg) and flags.issuperset(letters):
+            out += letters
+        else:
+            out.append(arg)
+    return out
+
+
+def _extra_git_allowed(parts: list[str], project_root: Path) -> bool:
+    """[F6] `_EXTRA_GIT_READ_OPTIONS`의 하위 명령을 업스트림과 같은 옵션 규칙으로 본다.
+
+    업스트림 루프는 `--` 뒤를 모두 받지만 `git branch -- x`는 브랜치를 만들어
+    `--` 뒤도 위치 인자로 센다. `-`로 시작하는 토큰은 `--` 뒤에서도 거부한다.
+
+    Returns:
+        허용 옵션만 쓰고 경로가 작업 트리 안이면 True.
+    """
+    if (
+        len(parts) < 2  # noqa: PLR2004  # git <하위 명령>
+        or parts[0] != "git"
+        or parts[1] not in _EXTRA_GIT_READ_OPTIONS
+        or not _command_paths_stay_in_worktree(parts, project_root)
+    ):
+        return False
+    subcommand = parts[1]
+    flags, valued = _EXTRA_GIT_READ_OPTIONS[subcommand]
+    seen: set[str] = set()
+    positional = False
+    args = iter(parts[2:])
+    for arg in args:
+        if arg == "--":
+            # [F6 리뷰] `describe --contains -- --stdin`은 name-rev가 옵션으로 읽는다
+            rest = list(args)
+            if any(a.startswith("-") for a in rest):
+                return False
+            positional = positional or bool(rest)
+            break
+        if not arg.startswith("-"):
+            positional = True
+            continue
+        allowed = _git_option_allowed(arg, subcommand, flags, valued)
+        if allowed is False:
+            return False
+        seen.add(arg.split("=", 1)[0])
+        if allowed is None:
+            value = next(args, None)
+            if value is None or value.startswith("-"):
+                return False
+    return not (
+        subcommand == "branch"
+        and positional
+        and seen.isdisjoint(_GIT_BRANCH_LIST_OPTIONS)
+    )
 
 
 def _find_read_only(segment: str) -> bool:

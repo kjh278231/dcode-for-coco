@@ -477,6 +477,22 @@ def is_read_only_shell(command: object, project_root: Path) -> bool:
     #    풀리면 `-C <경로>`를 떼고 본다. `-C`가 둘이면 두 번째에서 거부된다
     #    [F5 리뷰] 떼기 전 원문에 줄바꿈·`;`·`|`·`&`·`<>`·백틱이 있으면 거부한다. shlex로 다시 짜면
     #    줄바꿈이 공백이 되어 `git -C <루트> status\ntouch x`가 지나갔다
+    #    [F6] `-C`를 뗀 뒤 parse-options를 쓰는 하위 명령(status, ls-files, branch, describe,
+    #    cat-file, ls-tree, merge-base, show-ref, blame)에서 `-sb` 같은 한 대시 묶음을 글자마다
+    #    펼친다. 모든 글자가 그 하위 명령의 값 없는 허용 옵션일 때만 펼치고, 아니면 그대로 둬
+    #    옵션 검사가 거부한다. `--` 뒤는 펼치지 않는다. log, diff, show, rev-list, rev-parse는
+    #    git이 묶음을 받지 않아 펼치지 않는다
+    #    [F6] 업스트림이 거부하면 우리 표 `_EXTRA_GIT_READ_OPTIONS`(branch, describe, cat-file,
+    #    ls-tree, merge-base, show-ref, blame, rev-list)로 한 번 더 본다. 모양은 업스트림
+    #    `_GIT_READ_OPTIONS`와 같고(값 없는 옵션, 값을 받는 옵션) 옵션 하나는 업스트림
+    #    `_git_option_allowed`, 경로는 `_command_paths_stay_in_worktree`로 본다. 위의 원문 검사
+    #    (glob, `{`, `$`, 구분자, `-C` 루트)는 그대로 먼저 돈다. 값이 선택인 옵션(`--abbrev[=n]`)은
+    #    값 없는 쪽에 둔다. branch는 `--list`, `--contains`, `--no-contains`, `--merged`,
+    #    `--no-merged`, `--points-at` 중 하나가 있을 때만 위치 인자(`--` 뒤 포함)를 받는다
+    #    (`git branch -v x`, `git branch --abbrev 7`, `git branch -- x`는 브랜치를 만든다)
+    #    [F6 리뷰] 추가 표의 `--` 뒤에도 `-`로 시작하는 토큰은 거부한다(`describe --contains
+    #    -- --stdin`은 name-rev가 stdin을 읽는다). 원문을 shlex로 주석까지 읽은 결과가 다르면
+    #    (`#` 주석) 거부한다. sh는 `#` 뒤를 버려 `git branch x # --list`가 브랜치를 만든다
     # 4) [F1] 조합 명령을 조각마다 본다 (_read_only_chain). 모두 맞으면 True
     #    a) 스페이스나 문자열 끝으로 떨어진 `2>&1`, `2>/dev/null` 토큰만 지운다
     #       (유니코드 공백은 bash가 나누지 않으므로 경계로 보지 않는다)
@@ -550,7 +566,9 @@ def classify_call(
 
 [F5] 3), 4a), 4f)를 더한 이유. 릴리스본 dcode-a(glm-5.3-flash)가 `ls /root/a.py 2>/dev/null; ls /root/b.py`(`;` 앞 토큰을 못 지움, 버그), `ls /root/README.md >/dev/null && echo ok`, `git -C <루트> status --short --branch && git -C <루트> log --oneline -3`, `find /root -maxdepth 3 -name "pyvenv.cfg"`를 `no_approved_plan`으로 거부당했다. 안전 근거: /dev/null로 가는 출력은 버려지고, 단독 `&`와 다른 리다이렉트는 업스트림 검사에 남는다. `execute`는 `subprocess.run(shell=True)`, 즉 `/bin/sh`(여기서는 dash)로 돈다. dash에서 `&>`는 `&`(백그라운드)와 `>`로 나뉘어 `echo a &>/dev/null touch pw`가 `touch`를 실행하므로 `&>/dev/null`은 받지 않는다. `git -C <루트>`는 루트로 간 `cd` 뒤의 git과 같은 저장소 설정을 읽는다. find는 실행하거나 쓰는 식만 위험하고, 셸 펼침(glob, 중괄호, `$@`)이 식을 만들 수 있어 그 문자를 막는다. 같은 펼침이 git 허용 옵션 검사도 우회해서(`git log {--output=f,HEAD}`, 전부터 있던 우회) `{`, `$`를 git에도 막았다. 따옴표 안의 glob(`-name "*.py"`)은 펼쳐지지 않아 받는다. 판단 기록 O19, O20, O21.
 
-검사: 규칙표 아홉 줄 각각에 사례 하나 이상. `cat a > b`는 4번에 걸리지 않아야 한다. [F1] 위 세 명령은 4번에 걸리고, 쓰기가 가능한 닮은꼴(`2>&1>out`, `2>/dev/nullx`, `2> out`, `>&2`, `| tee`, `| xargs rm`, `sed -i`, `cd /tmp && git status`, `cd <루트>/src && git status`, 상대 경로 `cd`, 유니코드 공백이 붙은 `2>/dev/null`, 맨 앞이 아닌 `cd`, 쓰는 git 하위 명령, `python3`, 허용 이름의 함수 정의 `cat () ( touch x ) && cat`, glob이 붙은 git `git diff *`)은 걸리지 않는다 (`test_policy.py` `test_f1_*`). [F5] 위 네 명령은 4번에 걸리고, 닮은꼴(구분자 앞 `2>/dev/null&`, `>/dev/nullx`, `>/dev/null/x`, `>|`, `>>`, `3>/dev/null`, `1>&2`, 루트가 아닌·상대·하위 경로나 두 번 쓴 `git -C`, `-C` 뒤의 `-c`·`--git-dir`·`--output`, 중괄호와 `$@`로 만든 git 옵션, find의 위험한 식 전부와 따옴표·역슬래시로 숨긴 형태, 따옴표 밖 glob, `find … | xargs rm`)은 걸리지 않는다 (`test_policy.py` `test_f5_*`, 실제 셸 `test_gate.py` `test_f5_*`). 상대 경로 `docs/x.md`가 `/docs/x.md`로 정규화되어 루트 밖으로 판정되는지. 심볼릭 링크로 보호 폴더를 가리키는 경로.
+[F6] 3)의 묶음과 추가 표를 더한 이유. 같은 실사용에서 `git -C <루트> status -sb`, `merge-base main HEAD`, `merge-base --is-ancestor main HEAD`, `branch --contains main --list coco-mascot`, `branch --contains <해시>`가 거부됐고 거부 문장의 "읽기 git"이 막연해 모델이 git 형태만 바꿔 다시 시도했다. 안전 근거(git 2.43 `-h`와 실제 저장소로 확인): 표에 넣은 옵션은 ref, 설정, 작업 트리를 쓰지 않고 stdin을 읽지 않는다. 뺀 것은 cat-file `--batch*`(stdin), `--textconv`, `--filters`(프로그램), describe `--dirty`, `--broken`(index 갱신), show-ref `--exclude-existing`(stdin), blame `--contents`, `-S`, `--ignore-revs-file`(다른 파일을 읽음), branch의 만들기·지우기·옮기기·추적 옵션 전부. blame은 `git show`, `git log -p`처럼 저장소 설정에 textconv가 있으면 돌린다(업스트림 허용과 같은 신뢰). 업스트림 표는 고치지 않는다(auto 모드 결정적 허용이 같이 넓어진다). `no_approved_plan` 문장의 git 목록은 두 표에서 만든다(`policy.GIT_READ_SUBCOMMANDS`). 판단 기록 O22~O25.
+
+검사: 규칙표 아홉 줄 각각에 사례 하나 이상. `cat a > b`는 4번에 걸리지 않아야 한다. [F1] 위 세 명령은 4번에 걸리고, 쓰기가 가능한 닮은꼴(`2>&1>out`, `2>/dev/nullx`, `2> out`, `>&2`, `| tee`, `| xargs rm`, `sed -i`, `cd /tmp && git status`, `cd <루트>/src && git status`, 상대 경로 `cd`, 유니코드 공백이 붙은 `2>/dev/null`, 맨 앞이 아닌 `cd`, 쓰는 git 하위 명령, `python3`, 허용 이름의 함수 정의 `cat () ( touch x ) && cat`, glob이 붙은 git `git diff *`)은 걸리지 않는다 (`test_policy.py` `test_f1_*`). [F5] 위 네 명령은 4번에 걸리고, 닮은꼴(구분자 앞 `2>/dev/null&`, `>/dev/nullx`, `>/dev/null/x`, `>|`, `>>`, `3>/dev/null`, `1>&2`, 루트가 아닌·상대·하위 경로나 두 번 쓴 `git -C`, `-C` 뒤의 `-c`·`--git-dir`·`--output`, 중괄호와 `$@`로 만든 git 옵션, find의 위험한 식 전부와 따옴표·역슬래시로 숨긴 형태, 따옴표 밖 glob, `find … | xargs rm`)은 걸리지 않는다 (`test_policy.py` `test_f5_*`, 실제 셸 `test_gate.py` `test_f5_*`). [F6] 위 다섯 명령과 `log --oneline --first-parent -8 | cat`은 4번에 걸리고, 닮은꼴(목록 옵션 없는 `git branch <이름>`, `-- <이름>`, 지우기·옮기기·복사·추적 옵션, 허용 안 된 글자가 섞인 묶음, 값 옵션이 든 묶음, log·diff의 묶음, cat-file `--batch`·`--textconv`·`--filters`, blame `--contents`, describe `--dirty`, rev-list `--output`·`--stdin`)은 걸리지 않는다. 허용한 명령을 임시 저장소에서 `sh -c`로 돌려 ref, HEAD, 파일 목록이 그대로인지 본다 (`test_policy.py` `test_f6_*`). 상대 경로 `docs/x.md`가 `/docs/x.md`로 정규화되어 루트 밖으로 판정되는지. 심볼릭 링크로 보호 폴더를 가리키는 경로.
 
 ### 3.5 `reviewer.py`
 
@@ -851,7 +869,7 @@ class PlanGateMiddleware(AgentMiddleware):
 8) 카운터 갱신을 결과에 싣는다 (아래)
 ```
 
-[F1] `no_approved_plan` 문장은 다음 행동을 알려 준다. 승인 전 `execute`는 읽기 전용 명령과 그 조합만 통과하니 셸 명령을 바꿔 다시 시도하지 말고, 읽기는 `read_file`, `glob`, `grep`이나 `task(subagent_type="explorer")`로 하라는 것이다. 사유 코드는 그대로다(추적, 카운터, 규칙표가 쓴다). 셸 명령만 바꿔 가며 거부되는 반복은 `repeat_failures`에 잡히지 않는다(요약에 명령이 들어가 서명이 다르다). `gate_denies`가 세고 7.2 임계값(작업당 3)이 자기 개선에서 잡는다. 실행 중에 단계를 올리는 장치는 두지 않았다.
+[F1] `no_approved_plan` 문장은 다음 행동을 알려 준다. 승인 전 `execute`는 읽기 전용 명령과 그 조합만 통과하니([F6] 받는 git 하위 명령을 `policy.GIT_READ_SUBCOMMANDS`에서 만들어 이름으로 적고, branch는 목록만이라고 적는다) 셸 명령을 바꿔 다시 시도하지 말고, 읽기는 `read_file`, `glob`, `grep`이나 `task(subagent_type="explorer")`로 하라는 것이다. 사유 코드는 그대로다(추적, 카운터, 규칙표가 쓴다). 셸 명령만 바꿔 가며 거부되는 반복은 `repeat_failures`에 잡히지 않는다(요약에 명령이 들어가 서명이 다르다). `gate_denies`가 세고 7.2 임계값(작업당 3)이 자기 개선에서 잡는다. 실행 중에 단계를 올리는 장치는 두지 않았다.
 
 거부 메시지의 형태. [확인] 본보기는 `DC/auto_mode.py:4711` `HeadlessMCPGuardMiddleware._rejection`이다.
 

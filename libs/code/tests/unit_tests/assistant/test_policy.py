@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,7 @@ import pytest
 
 from deepagents_code._paths import project_paths
 from deepagents_code.assistant.policy import (
+    GIT_READ_SUBCOMMANDS,
     classify_call,
     is_protected,
     is_read_only_shell,
@@ -335,6 +337,262 @@ def test_f5_lookalikes_denied(root: Path, command: str) -> None:
         "deny",
         "no_approved_plan",
     )
+
+
+# [F6] dcode-a 실사용에서 거부된 읽기 git과 닮은꼴. {r}는 루트.
+_F6_ALLOWED = [
+    # 관찰된 명령
+    "git -C {r} status -sb",
+    "git -C {r} merge-base main HEAD",
+    "git -C {r} merge-base --is-ancestor main HEAD",
+    "git -C {r} branch --contains main --list coco-mascot",
+    "git -C {r} branch --contains e3a789816",
+    "git -C {r} log --oneline --first-parent -8 | cat",
+    # 묶음과 새 하위 명령
+    "git status -sbz",
+    "git ls-files -co --exclude-standard",
+    "git branch",
+    "git branch -vv",
+    "git branch -av",
+    "git branch --list 'feat-x'",
+    "git branch --merged main",
+    "git branch --no-merged=main --sort=-committerdate",
+    "git branch --points-at HEAD",
+    "git branch --show-current",
+    "git branch --format='%(refname:short)' --list main",
+    "git merge-base --all main HEAD",
+    "git merge-base --fork-point main",
+    "git rev-list --count HEAD",
+    "git rev-list -n 3 --first-parent HEAD",
+    "git blame -L 1,5 -sw a.txt",
+    "git blame --porcelain -- a.txt",
+    "git ls-tree -r --name-only HEAD",
+    "git cat-file -p HEAD:a.txt",
+    "git cat-file -t HEAD",
+    "git cat-file commit HEAD",
+    "git describe --tags --always",
+    "git describe --abbrev=7 --contains HEAD",
+    "git show-ref --heads -d",
+    "git show-ref --verify -q refs/heads/main",
+    "cd {r} && git branch -a | head -5",
+]
+
+
+@pytest.mark.parametrize("command", _F6_ALLOWED)
+def test_f6_read_only_git_allowed(root: Path, command: str) -> None:
+    command = command.format(r=root)
+    assert _classify(root, "execute", {"command": command}) == (
+        "allow",
+        "read_only_shell",
+    )
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        # branch: 이름을 주면 만든다. 목록 옵션(--list 등)이 없으면 위치 인자 거부
+        "git branch newname",
+        "git branch newname HEAD",
+        "git branch -- newname",
+        "git branch -v newname",
+        "git branch -q newname",
+        "git branch -a newname",
+        "git branch -l newname",
+        "git branch -i newname",
+        "git branch --color newname",
+        "git branch --abbrev 7",
+        "git branch --sort=refname newname",
+        "git branch --format=x newname",
+        "git branch --show-current newname",
+        "git branch -D x",
+        "git branch -d x",
+        "git branch --delete x",
+        "git branch -m a b",
+        "git branch -M b",
+        "git branch -c a b",
+        "git branch -C a b",
+        "git branch --move a b",
+        "git branch --copy a b",
+        "git branch -f x HEAD",
+        "git branch --track x origin/x",
+        "git branch -t x",
+        "git branch -u origin/main",
+        "git branch --set-upstream-to=origin/main",
+        "git branch --unset-upstream",
+        "git branch --edit-description",
+        "git branch --create-reflog x",
+        "git branch --list x -d",
+        "git branch --contains main -D x",
+        "git branch --cont main",
+        "git branch --sort -x",
+        "git branch --recurse-submodules",
+        # 리뷰: git은 긴 옵션 접두어를 받는다(`--delet`가 지운다). 표는 정확히 맞춘다
+        "git branch --delet x",
+        "git branch --mov a b",
+        "git branch --set-up=origin/main",
+        "git branch --no-list x",
+        "git branch --sort --list x",
+        "git branch --format --list x",
+        "git describe --dirt",
+        "git describe --brok",
+        "git cat-file --filt HEAD:a.txt",
+        "git cat-file --text HEAD:a.txt",
+        "git cat-file --pat=a.txt -p HEAD",
+        "git cat-file --batc",
+        "git show-ref --exclude-ex",
+        "git blame --content /etc/passwd a.txt",
+        "git blame --ignore-revs-f=f a.txt",
+        "git rev-list --outp=f HEAD",
+        "git rev-list --std",
+        "git --git-d=/tmp/x branch",
+        "git --work-t=/tmp branch",
+        "git --exec-path=/tmp branch",
+        "git branch -lc x",
+        # 리뷰: sh는 `#` 뒤를 버린다. shlex는 남겨 목록 옵션이 있는 척한다
+        "git branch newname # --list",
+        "git -C {r} branch newname # --contains HEAD",
+        "cd {r} && git branch newname # --list",
+        "git branch newname #--list",
+        # 리뷰: `--` 뒤의 옵션 모양 토큰. describe --contains는 name-rev에 넘긴다
+        "git describe --contains -- --stdin",
+        "git describe --contains -- --annotate-stdin",
+        "git describe -- --dirty",
+        "git rev-list HEAD -- --stdin",
+        "git cat-file -- --batch",
+        "git blame -- --contents",
+        "git branch --list -- -d x",
+        # 묶음: 한 글자라도 허용 옵션이 아니면 거부, 값을 받는 옵션은 묶지 않는다
+        "git status -bu",
+        "git status -sbuno",
+        "git branch -vd x",
+        "git branch -aD",
+        "git branch -vM a",
+        "git ls-files -cx f",
+        "git blame -sL 1,2 a.txt",
+        "git blame -sC a.txt",
+        "git log -pw",
+        "git diff -pR",
+        "git show-ref -dZ",
+        # merge-base: 이상한 옵션
+        "git merge-base --output=f main HEAD",
+        "git merge-base -c x main HEAD",
+        "git merge-base --is-anc main HEAD",
+        # cat-file: stdin, textconv, filters
+        "git cat-file --batch",
+        "git cat-file --batch-check",
+        "git cat-file --batch-command",
+        "git cat-file --batch-all-objects --batch",
+        "git cat-file --textconv HEAD:a.txt",
+        "git cat-file --filters HEAD:a.txt",
+        "git cat-file --path=a.txt --textconv HEAD",
+        "git cat-file -p /etc/passwd",
+        # blame: 다른 파일을 읽는 옵션
+        "git blame --contents /etc/passwd a.txt",
+        "git blame --contents x a.txt",
+        "git blame -S revs a.txt",
+        "git blame --ignore-revs-file f a.txt",
+        "git blame /etc/passwd",
+        "git blame -C a.txt",
+        # describe: index를 고친다
+        "git describe --dirty",
+        "git describe --broken",
+        # show-ref: stdin
+        "git show-ref --exclude-existing",
+        # rev-list: 쓰기와 stdin
+        "git rev-list --output=f HEAD",
+        "git rev-list --stdin",
+        "git rev-list --all --bisect-all",
+        "git rev-list -8 HEAD",
+        # 다른 공통 검사는 그대로
+        "git ls-tree --format -r HEAD",
+        "git ls-tree HEAD *",
+        "git rev-list HEAD@{{1}}",
+        "git rev-list $@--output=f",
+        "git -C /tmp merge-base main HEAD",
+        "git -C {r} -c core.pager=x branch",
+        "git --git-dir=/tmp/x branch",
+        "git -C {r} branch\ntouch pw",
+        "git branch --help",
+        "git branch -h",
+        "cd /tmp && git branch",
+    ],
+)
+def test_f6_lookalikes_denied(root: Path, command: str) -> None:
+    command = command.format(r=root)
+    assert not is_read_only_shell(command, root)
+    assert _classify(root, "execute", {"command": command}) == (
+        "deny",
+        "no_approved_plan",
+    )
+
+
+def test_f6_deny_text_names_every_git_subcommand() -> None:
+    from deepagents_code.assistant.gate import _DENY_TEXT
+
+    text = _DENY_TEXT["no_approved_plan"]
+    assert all(f" {name}" in text for name in GIT_READ_SUBCOMMANDS)
+    assert "읽기 git" not in text
+
+
+def _repo_snapshot(repo: Path) -> tuple[str, list[str]]:
+    refs = subprocess.run(
+        ["git", "for-each-ref", "--format=%(refname) %(objectname)"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    head = (repo / ".git" / "HEAD").read_text() + (repo / ".git" / "config").read_text()
+    files = sorted(
+        str(p.relative_to(repo)) for p in repo.rglob("*") if ".git" not in p.parts
+    )
+    return refs + head, files
+
+
+def test_f6_allowed_git_reads_only_in_real_repo(tmp_path: Path) -> None:
+    """[F6] 허용한 git을 sh로 돌려도 ref와 파일이 그대로다. 닮은꼴은 실제로 쓴다."""
+    repo = tmp_path.resolve()
+    git = [
+        "git",
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "-c",
+        "init.defaultBranch=main",
+    ]
+
+    def sh(command: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["sh", "-c", command], cwd=repo, capture_output=True, text=True, check=False
+        )
+
+    subprocess.run([*git, "init", "-q"], cwd=repo, check=True)
+    (repo / "a.txt").write_text("one\ntwo\n")
+    subprocess.run([*git, "add", "a.txt"], cwd=repo, check=True)
+    subprocess.run([*git, "commit", "-qm", "c1"], cwd=repo, check=True)
+    subprocess.run([*git, "tag", "-am", "v1", "v1"], cwd=repo, check=True)
+    subprocess.run([*git, "branch", "coco-mascot"], cwd=repo, check=True)
+    head = sh("git rev-parse --short HEAD").stdout.strip()
+    before = _repo_snapshot(repo)
+    for template in _F6_ALLOWED:
+        command = template.format(r=repo).replace("e3a789816", head)
+        assert is_read_only_shell(command, repo), command
+        result = sh(command)
+        # merge-base --fork-point와 --is-ancestor 말고는 성공해야 한다
+        assert result.returncode == 0 or "merge-base" in command, (command, result)
+        assert "unknown" not in result.stderr, (command, result.stderr)
+        assert _repo_snapshot(repo) == before, command
+    # 거부하는 이유: 이 닮은꼴은 실제로 브랜치를 만든다
+    for command in (
+        "git branch -v made1",
+        "git branch --abbrev 7",
+        "git branch -- made2",
+        "git branch made3 # --list",
+    ):
+        assert not is_read_only_shell(command, repo)
+        sh(command)
+    assert _repo_snapshot(repo) != before
 
 
 @pytest.mark.parametrize(
