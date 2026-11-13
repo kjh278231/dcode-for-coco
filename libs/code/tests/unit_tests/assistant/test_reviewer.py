@@ -86,7 +86,8 @@ def test_gate_prompt_per_phase() -> None:
     assert prompts.ASK_HUMAN_CRITERIA in prompts.GATE_BASE
     assert prompts.ASK_HUMAN_CRITERIA in prompts.REVIEWER_SYSTEM
     executing = prompts.gate_prompt("executing", "계획 p1")
-    assert executing.startswith(prompts.GATE_BASE)
+    assert executing.startswith(prompts.GATE_EXECUTING)
+    assert prompts.ASK_HUMAN_CRITERIA not in executing
     assert "승인됨" in executing
     assert executing.endswith("현재 계획:\n계획 p1")
     assert prompts.gate_prompt("idle", None) != prompts.gate_prompt("planning", None)

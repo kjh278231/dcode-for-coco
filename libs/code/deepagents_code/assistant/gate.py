@@ -81,9 +81,7 @@ _DENY_TEXT = {
     # [F1] 다음 행동을 알려 줘서 셸 명령만 바꿔 가며 다시 시도하지 않게 한다
     # [F6] git 하위 명령은 판정 표에서 만든다. branch는 목록만 받는다
     # [F7] execute가 이 문장을 받는 것은 샌드박스를 못 쓸 때뿐이다
-    "no_approved_plan": "승인된 계획이 없다. 승인 전 execute는 읽기 전용 "
-    "샌드박스에서 돈다(쓰기는 Read-only file system으로 실패하고 네트워크는 없다). "
-    "샌드박스를 못 쓰는 환경에서는 읽기 전용 명령"
+    "no_approved_plan": "승인된 계획이 없다. 샌드박스를 못 쓰는 환경이라 읽기 전용 명령"
     f"(ls, cat, head, grep, echo, 정해진 옵션의 git {', '.join(GIT_READ_SUBCOMMANDS)}."
     " branch는 목록만)과 그 조합만 통과하고 프로그램 실행과 쓰기는 통과하지 않으니 "
     "셸 명령을 바꿔 다시 시도하지 마라. 읽기는 read_file, "
@@ -107,7 +105,7 @@ _SANDBOX_NOTE = {
     "sandbox_protected": "\n\n[게이트] .deepagents/ 보호 폴더를 언급해 읽기 전용 "
     "샌드박스에서 돌렸다. 계획, Memory, 개선안 폴더는 직접 고칠 수 없다.",
 }
-_J5_YES = "\n\n[판정] 이 요청은 코드 변경이 필요하다. submit_plan으로 계획을 제출하라."
+_J5_YES = "\n\n[판정] 코드 변경이 필요하다. submit_plan으로 계획을 제출하라."
 _J5_NO = "\n\n[판정] 이 요청은 코드 변경이 필요 없어 보인다. 탐색 결과로 답하라."
 
 

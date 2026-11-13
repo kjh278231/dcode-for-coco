@@ -55,6 +55,17 @@ GATE_BASE: str = f"""\
 
 {ASK_HUMAN_CRITERIA}"""
 
+# [F9] 승인 뒤에는 탐색, 계획, 승인 절차와 되묻기 기준이 필요 없다
+GATE_EXECUTING: str = """\
+## 계획 게이트
+
+1. 계획의 targets 안에서 작업하고, 끝나면 complete_plan을 부른다.
+2. 계획에 없는 파일을 고쳐야 하면 submit_plan으로 계획을 고친다.
+3. .deepagents/plans, .deepagents/memory는 직접 고치지 않는다.
+4. 저장소에 계속 적용할 규칙을 알게 되면 propose_rule로 제안한다.
+   사람이 확인해야 저장된다.
+"""
+
 # [F9] 실사용에서 승인 전 python 시험 실행의 절반이 구현 시안과 상수 출력이었다
 _PRE_PLAN_SHELL = (
     "승인 전 셸은 사실 확인용이다. 구현을 미리 만들어 보거나 상수만 출력하는 "
@@ -74,8 +85,7 @@ _PHASE_GUIDE: dict[str, str] = {
     ),
     "awaiting_approval": "현재 단계: 사람의 승인이나 답을 기다린다.",
     "executing": (
-        "현재 단계: 승인됨. 계획의 targets 안에서 작업한다. 범위 밖으로 판정된 "
-        "execute는 읽기 전용 샌드박스에서 돈다(쓰기는 Read-only file system). "
+        "현재 단계: 승인됨. 범위 밖으로 판정된 execute는 읽기 전용 샌드박스에서 돈다. "
         "complete_plan이 test_command를 직접 돌리니 바로 앞에 같은 명령을 돌리지 "
         "않는다. 코드를 바꾸지 않았으면 테스트를 다시 돌리지 않는다."
     ),
@@ -139,7 +149,7 @@ def gate_prompt(phase: str, plan_summary: str | None) -> str:
     Returns:
         시스템 프롬프트에 덧붙일 문자열.
     """
-    parts = [GATE_BASE]
+    parts = [GATE_EXECUTING if phase == "executing" else GATE_BASE]
     if phase in _PHASE_GUIDE:
         parts.append(_PHASE_GUIDE[phase])
     if plan_summary:

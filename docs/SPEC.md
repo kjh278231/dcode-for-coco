@@ -1107,7 +1107,8 @@ def require_jev_key(environ: Mapping[str, str]) -> None:
 문자열 상수와 조립 함수만 둔다.
 
 ```python
-GATE_BASE: str            # 모든 단계 공통: 흐름 설명
+GATE_BASE: str            # executing 외 단계: 흐름 설명
+GATE_EXECUTING: str        # [F9] executing 단계: 승인 뒤 규칙만(되묻기 기준 없음)
 EXPLORER_DESCRIPTION: str
 EXPLORER_SYSTEM: str
 REVIEWER_SYSTEM: str
