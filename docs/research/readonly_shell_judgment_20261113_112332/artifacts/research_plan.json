@@ -1,0 +1,11 @@
+{
+  "subtopics": {
+    "A_claude_code": "Claude Code: Bash permission rules, read-only command allowlist, command prefix/injection check (Haiku), bash parsing (tree-sitter/shell-quote), sandbox (sandbox-runtime: Seatbelt / bubblewrap+seccomp), plan mode, auto mode classifier, CVEs/GHSAs 2025-2026",
+    "B_codex": "OpenAI Codex CLI: is_safe_command / known-safe list, bash -lc parsing via tree-sitter, approval policies (untrusted/on-request/never), sandbox modes (read-only/workspace-write/danger-full-access), Seatbelt, Landlock+seccomp, bubblewrap move, execpolicy rules, CVEs",
+    "C_gemini_cursor_copilot": "Gemini CLI (tools.allowed/core tools, shell parsing, sandbox seatbelt/docker/podman, plan mode), Cursor agent (auto-run allowlist, denylist bypasses, sandbox on macOS/Linux), GitHub Copilot coding agent + Copilot CLI (firewall, --allow-tool, container)",
+    "D_others": "OpenHands (docker runtime, security analyzer, confirmation mode), Aider (/run, no sandbox), Cline / Roo Code (auto-approve safe commands, requires_approval, allowed command prefixes), Amp (permissions, allowlist), others (Continue, Goose, Zed, Windsurf)",
+    "E_cves_and_linux_primitives": "Known bypasses/CVEs 2025-2026 of static allowlists across tools; Linux primitives: bubblewrap, Landlock ABI, seccomp, unprivileged user namespaces, WSL2 kernel support"
+  },
+  "axes": ["static judgment", "OS sandbox", "approval/permission rule design", "python -c in read-only/plan phase", "bypasses/CVEs"],
+  "date_awareness": "today 2026-11-13; queries include 2025 / 2026"
+}

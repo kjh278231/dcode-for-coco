@@ -1,0 +1,5 @@
+before: 644 2000-01-01 00:00:00.000000000 +0900
+exit_chmod_touch=0
+after:  600 2026-11-13 11:37:23.532799971 +0900
+exit_connect=0
+server file: via-unix-socket

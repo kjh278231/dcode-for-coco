@@ -3015,7 +3015,10 @@ def create_cli_agent(
             } - plan_gate.mcp_mutating_tool_names
             middleware.append(
                 SubagentWriteBlockMiddleware(
-                    plan_gate.project_root, frozenset(read_only_mcp)
+                    plan_gate.project_root,
+                    frozenset(read_only_mcp),
+                    # [F7] 원격 샌드박스가 아니면 execute는 이 머신의 셸에서 돈다
+                    shell_sandbox=sandbox is None,
                 )
             )
         return middleware

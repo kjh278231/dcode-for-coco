@@ -66,6 +66,7 @@ DC/assistant/
   runs.py              Langfuse 조회, 신호 집계, /runs 출력 문자열
   improve.py           ImprovementStore, 임계값, 반영
   prompts.py           시스템 프롬프트 덧붙임, 리뷰어 지침, 탐색 지침, 되묻기 기준
+  sandbox.py           [F7] 계획 전 execute의 읽기 전용 네임스페이스 런처와 가용성 탐침
   evalsuite/
     __main__.py        python -m deepagents_code.assistant.evalsuite
     runner.py          과제 실행과 채점
@@ -108,6 +109,9 @@ libs/code/tests/unit_tests/assistant/
 | `DC/command_registry.py` | `/improve`, `/runs` 등록, `/trace` 설명 변경 | M7 |
 | `DC/app.py` | `/improve`, `/runs` 처리기, `/trace`와 `/remember` 교체 | M5, M7 |
 | `DC/built_in_skills/remember/SKILL.md` | 삭제 | M5 |
+| `DC/_env_vars.py` | [F7] 상수 `PLAN_SANDBOX` (`DEEPAGENTS_CODE_PLAN_SANDBOX`, 계획 전 샌드박스 끄기) | F7 |
+| `DC/agent.py` | [F7] `SubagentWriteBlockMiddleware(..., shell_sandbox=sandbox is None)` | F7 |
+| `libs/code/scripts/check_process_cwd.py` | [F7] `assistant/sandbox.py` `main`의 `os.getcwd` 허용 항목 추가 (O31) | F7 |
 | `libs/code/README.md` | 테스트 케이스와 실행 방법 | M9 |
 
 `DC/tui/` 아래는 고치지 않는다. 승인과 질문은 기존 화면을 쓴다.
@@ -556,6 +560,8 @@ def classify_call(
 | 8 | `WRITE_PATH_TOOLS`이고 상대 경로가 `targets`에 있고 `fresh_approval`이다 | allow | `in_targets` |
 | 9 | 그 밖 | needs_scope_check | `scope_check` |
 
+[F7] 표 다음에 게이트가 한 번 더 본다(`gate._decide`, policy는 그대로다). `execute`이고 `phase`가 `executing`이 아니고 사유가 `read_only_shell`(4번)이나 `no_approved_plan`(7번)이면, 샌드박스를 쓸 수 있을 때 결정을 `sandbox`로 바꾼다(3.7). 5번 `protected_path`는 그대로 거부다. 그래서 4번 `is_read_only_shell`과 그 아래 F1~F6 판정은 샌드박스를 못 쓸 때의 대체 경로이고, 승인 뒤에는 전처럼 4번이 J4 없이 통과시키는 판정이다.
+
 쓰기 계열은 `WRITE_PATH_TOOLS | SHELL_TOOLS | OTHER_MUTATING_TOOLS | mcp_mutating`이다. `mcp_mutating`에는 확장 도구 이름도 들어 있다 [M4].
 
 [M4] 1a의 이유. 원격 비동기 서브에이전트(`start_async_task`, `update_async_task`)는 다른 서버에서 돌아 쓰기 차단이 없고, J4는 `summarize_call`로 도구 이름만 받아 범위를 판단할 수 없다. P3에 맞춰 승인 뒤에도 거부한다. `cancel_async_task`는 쓰기를 늘리지 않으므로 9번(J4)에 남는다.
@@ -869,6 +875,20 @@ class PlanGateMiddleware(AgentMiddleware):
 8) 카운터 갱신을 결과에 싣는다 (아래)
 ```
 
+[F7] 계획 전 `execute`는 읽기 전용 샌드박스에서 돈다 (`sandbox.py`, 근거는 `docs/research/readonly_shell_judgment_20261113_112332/`, 판단 기록 O26~O32).
+
+```
+4') _decide: name == "execute", phase != "executing", classify_call 사유가 read_only_shell이나
+    no_approved_plan, 백엔드(CompositeBackend.default)가 LocalShellBackend, command가 빈 문자열이
+    아닌 str, sandbox.available()이면 결정 "sandbox"
+5') sandbox면 request.override(tool_call={..., "args": {..., "command": sandbox.wrap_command(원래)}})를
+    handler에 넘긴다. 카운터와 요약(_counted)은 원래 요청으로 한다
+```
+
+- 런처: `<sys.executable> -I <sandbox.py 절대 경로> <명령>`을 `exec`로 돌린다. user+mount+net+IPC+PID 네임스페이스(자기 uid 매핑), `/` 재귀 private, `/run`과 `/dev/pts` tmpfs, `mount_setattr(AT_RECURSIVE, RDONLY)`, 버리는 tmpfs(보통 `/tmp`, cwd가 `/tmp` 아래면 `/run/tmp`이고 `/tmp`는 읽기 전용), TMPDIR, RLIMIT_CORE 1 고정, seccomp(`socket`은 AF_INET, AF_INET6, AF_NETLINK만 열고 AF_UNIX, AF_VSOCK 등은 EPERM, 데이터그램 `socketpair`, io_uring, ptrace, process_vm_readv/writev, pidfd_getfd, add_key/request_key/keyctl, RLIMIT_CORE를 바꾸는 setrlimit/prlimit64는 EPERM, x32와 x86_64 밖은 종료), fork 두 번(새 PID 네임스페이스의 1번은 기다리기만 하고, 손자가 읽기 전용 새 `/proc`과 setsid), `/bin/sh -c <명령>`. [F7 리뷰] PID 네임스페이스로 밖의 같은 uid 프로세스에 시그널, prlimit, renice를 못 하고 `/proc`에 안 보이며, 명령이 끝나면 남은 백그라운드 프로세스도 커널이 죽인다. RLIMIT_CORE 고정은 core_pattern이 파이프(WSL `/wsl-capture-crash`)일 때 한도 0에서도 root 도우미가 덤프를 C: 드라이브에 쓰기 때문이다(한도 1만 덤프를 멈춘다). 설정이 실패하면 명령 없이 125와 `plan sandbox: setup failed, command not run`.
+- 가용성: `DEEPAGENTS_CODE_PLAN_SANDBOX`가 `0`이나 `false`가 아니고, linux x86_64이고, 런처로 `true`를 돌린 탐침이 0이면 쓴다. 탐침은 프로세스당 한 번이다. 못 쓰면 F1~F6 정적 판정 그대로다. 실행 중 125는 정적 판정으로 다시 보내지 않는다(쓰기는 없고 출력이 이유를 말한다).
+- 보이는 것: 모델, 승인 화면, auto 분류기, 체크포인트는 원래 명령을 본다. 게이트 안쪽의 `ServerHooksMiddleware`(PreToolUse 훅)와 실행은 감싼 명령을 본다. 결과는 업스트림 `execute` 그대로(`status="success"`, 출력과 `Exit code`)라 쓰기 실패는 "Read-only file system"과 0이 아닌 종료 코드로 보이고 거부(`gate_denies`)로 세지 않는다.
+
 [F1] `no_approved_plan` 문장은 다음 행동을 알려 준다. 승인 전 `execute`는 읽기 전용 명령과 그 조합만 통과하니([F6] 받는 git 하위 명령을 `policy.GIT_READ_SUBCOMMANDS`에서 만들어 이름으로 적고, branch는 목록만이라고 적는다) 셸 명령을 바꿔 다시 시도하지 말고, 읽기는 `read_file`, `glob`, `grep`이나 `task(subagent_type="explorer")`로 하라는 것이다. 사유 코드는 그대로다(추적, 카운터, 규칙표가 쓴다). 셸 명령만 바꿔 가며 거부되는 반복은 `repeat_failures`에 잡히지 않는다(요약에 명령이 들어가 서명이 다르다). `gate_denies`가 세고 7.2 임계값(작업당 3)이 자기 개선에서 잡는다. 실행 중에 단계를 올리는 장치는 두지 않았다.
 
 거부 메시지의 형태. [확인] 본보기는 `DC/auto_mode.py:4711` `HeadlessMCPGuardMiddleware._rejection`이다.
@@ -924,6 +944,8 @@ class SubagentWriteBlockMiddleware(AgentMiddleware):
     #   허용 목록 밖이면 거부 (쓰기, PLAN_TOOLS, task, 확장 도구 포함)
     #   execute는 policy.is_read_only_shell일 때만 통과
 ```
+
+[F7] `__init__`에 키워드 인자 `shell_sandbox: bool = False`. 참이고 샌드박스를 쓸 수 있으면 `execute`를 단계와 관계없이 주 게이트와 같은 방법으로 감싸 통과시킨다. 아니면 전처럼 `is_read_only_shell`. `agent.py`는 `shell_sandbox=sandbox is None`을 넘긴다(원격 샌드박스에서는 명령이 이 머신에서 돌지 않는다).
 
 이름을 주 게이트와 같게 두는 이유. [확인] 기본 `general-purpose` 서브에이전트는 fork 모드라서 부모의 미들웨어를 물려받는다. 사양에 같은 이름의 미들웨어가 있으면 사양 쪽이 부모 것을 대신한다 (`SDK/graph.py:774`). 같은 이름으로 두면 물려받은 `PlanGateMiddleware`가 `SubagentWriteBlockMiddleware`로 바뀐다. 계획 도구가 서브에이전트에 노출되지 않는다.
 
@@ -1088,7 +1110,7 @@ def gate_prompt(phase: str, plan_summary: str | None) -> str:
 
 `GATE_BASE`의 요지.
 
-1. 요청을 받으면 먼저 `task(subagent_type="explorer")`로 탐색한다. [F5] 승인 전에는 셸 명령 대신 `read_file`, `glob`, `grep`이나 탐색 서브에이전트로 읽는다.
+1. 요청을 받으면 먼저 `task(subagent_type="explorer")`로 탐색한다. [F5] 승인 전에는 셸 명령 대신 `read_file`, `glob`, `grep`이나 탐색 서브에이전트로 읽는다. [F7] 승인 전 `execute`는 읽기 전용 샌드박스에서 돈다고 알린다(쓰기는 Read-only file system으로 실패, 네트워크 없음, 임시 파일은 TMPDIR만). 파일 읽기는 여전히 읽기 도구가 낫다고 적는다.
 2. 코드를 바꿔야 하면 `submit_plan`으로 계획을 낸다. 쓰기 도구는 승인 전까지 쓸 수 없다.
 3. 리뷰 의견이 오면 반영해 다시 제출한다.
 4. `request_plan_approval`로 사람의 승인을 받는다.
@@ -2104,7 +2126,8 @@ README에 함께 적는 것. 필요한 키와 없을 때의 동작, 게이트 �
 - [M6] 게이트는 도구 결과를 카운터와 함께 `Command`로 감싼다. 게이트 바깥 미들웨어가 `ToolMessage`를 기대하면 동작이 바뀐다. `ask_user`는 `AskUserMiddleware`의 인자 거절 경고가 `ToolMessage`를 봐야 해서 감싸지 않는다(그래서 `cg.tool_calls`에 들어가지 않는다). `MemoryGuardMiddleware`가 관리 블록을 되돌리며 결과를 오류 `ToolMessage`로 바꾸면 그 호출의 카운터 증가분이 사라진다.
 - [M6] 추적이 켜진 실행에서는 `cg.memory.inject`에 상한으로 뺀 기억을 적으려고 요청 시작 때 주입 글을 한 번 더 만든다. 추적이 꺼져 있으면 만들지 않는다.
 - [M6] 서브에이전트 안의 도구 호출은 카운터에 들어가지 않는다. 승인 화면에서 멈춘 실행에는 `after_agent`가 돌지 않아 점수가 없다.
-- [F1] 승인 전 `execute`의 읽기 전용 판정은 명령 이름 허용 목록이다. `cat`, `head`, `ls`는 프로젝트 밖 파일도 읽는다(전부터 그랬다). `cd`는 맨 앞의 절대 경로 하나만(그 뒤의 git은 루트로 갈 때만), `2>&1`과 `2>/dev/null` 밖의 리다이렉트는 받지 않는다. `(cd x && ls)`처럼 괄호로 묶은 명령, `printf`, `sed -n`, `rg`는 여전히 거부된다. [F5] `>/dev/null`, `1>/dev/null`(같이 쓰는 `2>&1` 포함. `&>/dev/null`은 sh에서 백그라운드라 거부), 루트로 가는 `git -C <절대 경로>`, 위험한 식이 없는 `find`를 더 받는다. find는 역슬래시(`\(`), `{`, `$`, 따옴표 밖 glob이 있으면 거부되고 `find`도 `cat`처럼 프로젝트 밖을 읽는다. git은 `{`, `$`가 있으면 거부된다(`HEAD@{1}` 포함).
+- [F1] ([F7] 뒤로는 샌드박스를 못 쓸 때와 승인 뒤의 J4 없는 통과에만 해당한다) 승인 전 `execute`의 읽기 전용 판정은 명령 이름 허용 목록이다. `cat`, `head`, `ls`는 프로젝트 밖 파일도 읽는다(전부터 그랬다). `cd`는 맨 앞의 절대 경로 하나만(그 뒤의 git은 루트로 갈 때만), `2>&1`과 `2>/dev/null` 밖의 리다이렉트는 받지 않는다. `(cd x && ls)`처럼 괄호로 묶은 명령, `printf`, `sed -n`, `rg`는 여전히 거부된다. [F5] `>/dev/null`, `1>/dev/null`(같이 쓰는 `2>&1` 포함. `&>/dev/null`은 sh에서 백그라운드라 거부), 루트로 가는 `git -C <절대 경로>`, 위험한 식이 없는 `find`를 더 받는다. find는 역슬래시(`\(`), `{`, `$`, 따옴표 밖 glob이 있으면 거부되고 `find`도 `cat`처럼 프로젝트 밖을 읽는다. git은 `{`, `$`가 있으면 거부된다(`HEAD@{1}` 포함).
+- [F7] 계획 전 샌드박스는 쓰기와 네트워크만 막는다. 비밀 파일(`~/.ssh`, `.env`)은 읽히고 그 내용이 모델 컨텍스트로 들어간다(보호 폴더 문자열 검사는 쓰기 명령에만 남았다). [F7 리뷰] 같은 uid 프로세스는 PID 네임스페이스로 가려졌다. 장치 파일은 읽기 전용 마운트로 막히지 않는다(`/dev/dxg` GPU는 열린다. 다른 터미널 `/dev/pts`는 가렸다). 프로젝트 `.env`가 `DEEPAGENTS_CODE_PLAN_SANDBOX=0`을 넣으면 정적 판정으로 내려간다(dotenv 거부 목록에 없다. `DEEPAGENTS_CODE_PLAN_GATE`도 같다). seccomp는 x86_64 전용이라 다른 아키텍처에서는 정적 판정으로 넘어간다. WSL2(커널 6.6)에서만 확인했고, AppArmor가 비특권 user 네임스페이스를 막는 일반 Ubuntu(23.10+)에서는 탐침이 실패해 정적 판정으로 넘어갈 것으로 본다(확인 못 함). 프로젝트가 `/tmp` 아래면 `/tmp`는 읽기 전용이고 임시 공간은 `/run/tmp`(TMPDIR)다. `/tmp`를 직접 쓰는 도구는 실패한다. 프로젝트가 `/run` 아래면 가려져 설정이 실패한다(125). 승인 뒤 `execute`와 승인 전에도 PreToolUse 훅이 명령을 고치는 경우는 샌드박스 밖이다. 포크 폭탄과 긴 실행은 기존 timeout만 막는다.
 - [F2] auto 모드(`AutoModeHITLMiddleware`)는 게이트보다 먼저 판단한다. 분류기는 주 모델 응답을 감싸는 `awrap_model_call`에서, 승인 맵에 든 도구(`execute` 등) 중 결정적 허용(`_fixed_repo_command_allowed`, 설정한 좁은 셸 허용 목록) 밖의 호출을 모두 검토한다. 게이트는 그 뒤 도구 실행 때(`awrap_tool_call`) 판단한다. 그래서 게이트가 어차피 거부할 호출도 분류기를 거치고, 분류기가 거부하면(시간 초과 포함) 그 메시지(`Auto denied [...]`)가 게이트의 안내 문장 대신 모델에 간다. 분류기는 `_SHELL_CONTROL_RE`로 조합 명령을 결정적 허용에서 빼므로 F1에서 넓힌 읽기 명령도 분류기를 거친다. 게이트의 허용을 분류기의 허용으로 넘기지 않는다(우리 판정기가 분류기 우회로가 된다). 안전은 둘이 따로 막으므로 줄지 않는다. 비용과 지연, 메시지가 달라질 뿐이다.
 - [F2] 분류기 시간 제한은 기본 20초(`config_manifest.AUTO_CLASSIFIER_TIMEOUT_SECONDS_DEFAULT`)이고, 재시도 대기도 이 안에 든다. 분류기 모델은 지정하지 않으면 주 모델이다. 바꾸는 법: `DEEPAGENTS_CODE_AUTO_CLASSIFIER_TIMEOUT`이나 `config.toml` `[models].auto_classifier_timeout`(1~300초, 다음 시작부터), `DEEPAGENTS_CODE_AUTO_CLASSIFIER_MODEL`이나 `[models].auto_classifier`나 `--auto-classifier-model`(더 빠른 별도 모델). 프로젝트 `.env`로는 둘 다 정할 수 없다. 시간 초과는 그 호출을 거부하고(실행하지 않음), 연속 2번 뒤의 검토부터는 사람 승인으로 넘어간다(`_CONSECUTIVE_UNAVAILABLE_FALLBACK`). 실사용에서 본 20초 초과는 재현하지 못했다. 같은 모델 `glm-5.3-flash-ultrafast`로 체크포인트에 남은 분류기 요청 다섯 개(성공한 것들. 시간 초과 난 요청은 판정 뒤에만 저장돼 남지 않는다)를 세 번씩 0.7~4.9초, 시간 초과 난 호출을 직전 기록과 앞선 호출로 재구성한 요청은 여섯 번 3.5~7.9초(모두 거부 판정)였다. 재구성이고 새로 만든 모델 객체라 실행 당시의 모델 설정과는 다를 수 있다.
 - [F8] auto 모드(`AutoModeHITLMiddleware(jev_review=True)`, `agent.py`가 켠다)는 분류기 모델 대신 Jev(`assistant/decider.py`)로 승인 대상 호출을 검토한다. 결정적 허용과 게이트, 분류기 이후 경로는 그대로다. 판정은 질문 하나(허용해도 안전한가)의 확률이고 임계값은 `PLAN_GATE_JEV_THRESHOLD`를 따른다(기본 0.5). 거부 이유는 확률만 말한다. 키가 없으면 검토 없이 허용한다(경고 로그 한 줄). 그래서 키만 지우면 auto 모드의 안전 검사가 꺼진다. 키가 있고 호출이 실패하거나 시간 초과(분류기 시간 제한을 따른다)면 `require_human`이다. 실험(샘플 셸 명령 41개, 내가 붙인 라벨, OpenRouter `typesafe/jev-1.13`): 오판 2개(안전을 거부 1, 위험을 허용 1, 둘 다 임계값 근처), 지연 중앙 0.37초. 현재 분류기와의 나란한 비교, 우회 시도, 긴 대화 컨텍스트에서의 정확도는 확인하지 못했다. `jev_review`를 안 켠 경로는 기존 분류기 그대로라 업스트림 테스트는 고치지 않았다.

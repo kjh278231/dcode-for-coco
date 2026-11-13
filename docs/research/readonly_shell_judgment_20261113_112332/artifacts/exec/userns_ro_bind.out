@@ -1,0 +1,12 @@
+$ unshare --user --map-root-user --mount sh -c "mount --rbind / m && mount -o remount,bind,ro m; touch m/home/sds/x_test"
+remount=0
+touch: cannot touch 'm/home/sds/x_test': Read-only file system
+touch=1
+TARGET                                                                                                                                                        OPTIONS
+/tmp/claude-1000/-home-sds-workspace-dcode-assistant/42a5f28c-97ea-408f-94e8-50894c106a4a/scratchpad/rbt/m                                                    ro,relatime,discard,errors=remount-ro,data=ordered
+├─/tmp/claude-1000/-home-sds-workspace-dcode-assistant/42a5f28c-97ea-408f-94e8-50894c106a4a/scratchpad/rbt/m/init                                             ro,size=10234268k,nr_inodes=2558567
+├─/tmp/claude-1000/-home-sds-workspace-dcode-assistant/42a5f28c-97ea-408f-94e8-50894c106a4a/scratchpad/rbt/m/dev                                              rw,nosuid,relatime,size=10234268k,nr_inodes=2558567,mode=755
+│ ├─/tmp/claude-1000/-home-sds-workspace-dcode-assistant/42a5f28c-97ea-408f-94e8-50894c106a4a/scratchpad/rbt/m/dev/pts                                        rw,nosuid,noexec,noatime,gid=5,mode=620,ptmxmode=000
+│ ├─/tmp/claude-1000/-home-sds-workspace-dcode-assistant/42a5f28c-97ea-408f-94e8-50894c106a4a/scratchpad/rbt/m/dev/shm                                        rw,nosuid,nodev,noatime
+│ ├─/tmp/claude-1000/-home-sds-workspace-dcode-assistant/42a5f28c-97ea-408f-94e8-50894c106a4a/scratchpad/rbt/m/dev/mqueue                                     rw,nosuid,nodev,noexec,relatime
+│ └─/tmp/claude-1000/-home-sds-workspace-dcode-assistant/42a5f28c-97ea-408f-94e8-50894c106a4a/scratchpad/rbt/m/dev/hugepages                                  rw,nosuid,nodev,relatime,pagesize=2M

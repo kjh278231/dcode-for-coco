@@ -1,0 +1,101 @@
+kernel=6.6.87.2-microsoft-standard-WSL2; cwd=/home/sds/workspace/dcode-assistant
+--- git status -sb | head -3
+## master
+?? docs/research/readonly_shell_judgment_20261113_112332/
+exit=0
+--- libs/code/.venv/bin/python -c 'import textual; print(textual.__version__)'
+8.2.8
+exit=0
+--- cat() { echo pwned > fn_probe.txt; }; cat
+sh: 1: cannot create fn_probe.txt: Read-only file system
+exit=2
+--- git log -1 --output=gitout_probe.txt
+fatal: could not open 'gitout_probe.txt' for writing: Read-only file system
+exit=128
+--- touch probe_file; chmod 600 README.md
+touch: cannot touch 'probe_file': Read-only file system
+chmod: cannot access 'README.md': No such file or directory
+exit=1
+--- echo ok > /tmp/scratch && cat /tmp/scratch
+ok
+exit=0
+--- systemd-run --user --wait --quiet touch /home/sds/bus_probe_file; echo systemd_run_exit=$?
+Failed to connect to bus: No such file or directory
+systemd_run_exit=1
+exit=0
+--- /mnt/c/Windows/System32/cmd.exe /c echo interop-ran 2>&1 | tail -1
+<3>WSL (1634226 - ) ERROR: UtilConnectUnix:533: connect failed 2
+exit=0
+--- python3 -c 'import socket; socket.create_connection(("1.1.1.1",53),3)' 2>&1 | tail -1
+OSError: [Errno 101] Network is unreachable
+exit=0
+--- find / \( -path /proc -o -path /sys -o -path /mnt/c -o -path /mnt/d \) -prune -o -type s -print 2>/dev/null | head -20
+/mnt/wslg/PulseAudioRDPSink
+/mnt/wslg/PulseAudioRDPSource
+/mnt/wslg/PulseServer
+/mnt/wslg/run/user/1000/vscode-git-864dc6ee6c.sock
+/mnt/wslg/run/user/1000/vscode-ipc-0a2445f4-c369-47d9-b6ad-c64d2f544695.sock
+/mnt/wslg/run/user/1000/vscode-git-e87d202c78.sock
+/mnt/wslg/run/user/1000/vscode-ipc-e485b551-8c9e-4ced-998a-a99a296a98fe.sock
+/mnt/wslg/run/user/1000/vscode-git-75bd9e8a6f.sock
+/mnt/wslg/run/user/1000/vscode-ipc-410de64a-e85d-4775-bd32-99b864ae2d99.sock
+/mnt/wslg/run/user/1000/vscode-ipc-f10ff37a-74c2-4408-b349-27e8cbe2b942.sock
+/mnt/wslg/run/user/1000/vscode-git-e96a94d252.sock
+/mnt/wslg/run/user/1000/vscode-ipc-4d788b74-5d8c-4957-acee-40eda9c4d3ee.sock
+/mnt/wslg/run/user/1000/vscode-ipc-fee05c11-7b7b-4a68-ad73-54f6fd0a4445.sock
+/mnt/wslg/run/user/1000/vscode-ipc-dda0964a-e3f2-4bd6-b053-2df374165452.sock
+/mnt/wslg/run/user/1000/cc-socks/1336020.sock
+/mnt/wslg/run/user/1000/cc-socks/1293432.sock
+/mnt/wslg/run/user/1000/cc-socks/3339636.sock
+/mnt/wslg/run/user/1000/cc-socks/3325433.sock
+/mnt/wslg/run/user/1000/cc-socks/3321988.sock
+/mnt/wslg/run/user/1000/cc-socks/307641.sock
+exit=0
+stat: cannot statx 'README.md': No such file or directory
+=== host after probes: ls: cannot access 'fn_probe.txt': No such file or directory ls: cannot access 'gitout_probe.txt': No such file or directory ls: cannot access 'probe_file': No such file or directory ls: cannot access '/home/sds/bus_probe_file': No such file or directory  README mode=
+--- chmod on tracked file
+chmod: changing permissions of 'AGENTS.md': Read-only file system
+exit=1 mode=644
+--- systemd user bus via /mnt/wslg path
+systemd_run_exit=0
+host file: /home/sds/bus_probe_file2
+--- all reachable sockets (count by top dir)
+      3 /home/sds
+     35 /mnt/wslg
+
+===== after adding seccomp AF_UNIX/io_uring deny =====
+--- git status -sb | head -2
+## master
+?? docs/research/readonly_shell_judgment_20261113_112332/
+exit=0
+--- libs/code/.venv/bin/python -c 'import textual; print(textual.__version__)'
+8.2.8
+exit=0
+--- ls | wc -l; grep -c . AGENTS.md; find . -maxdepth 1 -name '*.md' | head -2
+9
+17
+./PROGRESS.md
+./CLAUDE.md
+exit=0
+--- DBUS_SESSION_BUS_ADDRESS=unix:path=/mnt/wslg/run/user/1000/bus XDG_RUNTIME_DIR=/mnt/wslg/run/user/1000 systemd-run --user --wait --quiet touch /home/sds/bus_probe_file3; echo systemd_run_exit=$?
+Failed to connect to bus: Operation not permitted
+systemd_run_exit=1
+exit=0
+--- python3 -c 'import socket; s=socket.socket(socket.AF_UNIX); s.connect("/home/sds/.config/herdr/herdr.sock")' 2>&1 | tail -1
+PermissionError: [Errno 1] Operation not permitted
+exit=0
+--- echo hi > /tmp/x && cat /tmp/x
+hi
+exit=0
+host: ls: cannot access '/home/sds/bus_probe_file3': No such file or directory
+10 runs elapsed=0.14
+
+===== after adding x32 kill rule and setsid =====
+host: legacy_tiocsti=0 CONFIG_X86_X32_ABI=1
+git status -sb identical inside and outside launcher
+8.2.8
+sh: 1: cannot create probe_after: Read-only file system
+1651453 ?
+OSError: [Errno 6] No such device or address: '/dev/tty'
+exit=0
+PermissionError: [Errno 1] Operation not permitted

@@ -34,7 +34,9 @@ GATE_BASE: str = f"""\
 이 세션은 계획 승인 전에는 파일을 바꿀 수 없다. 다음 순서를 따른다.
 
 1. 요청을 받으면 먼저 task(subagent_type="explorer")로 탐색한다.
-   승인 전에는 셸 명령 대신 read_file, glob, grep이나 탐색 서브에이전트로 읽는다.
+   승인 전 execute는 읽기 전용 샌드박스에서 돈다. 쓰기는 Read-only file system으로
+   실패하고 네트워크는 없으며 임시 파일은 TMPDIR에만 쓸 수 있다(끝나면 버려진다).
+   파일 읽기는 read_file, glob, grep이나 탐색 서브에이전트가 낫다.
 2. 코드를 바꿔야 하면 submit_plan으로 계획을 낸다.
    쓰기 도구는 승인 전까지 쓸 수 없다.
 3. 리뷰 의견이 오면 반영해 다시 제출한다.

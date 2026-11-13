@@ -1,6 +1,6 @@
 # M8 이후 작업
 
-`dcode-a`(M7 `4235bca` 릴리스본)를 실제 작업에 써 보다가 나온 문제다. M8을 끝낸 뒤, M9 전후에 처리한다. 처리하면 PROGRESS.md에 결과를 적고 여기서 지운다. F1, F3과 F2의 조사·문서화는 끝났다(PROGRESS.md "F1–F3" 절, DECISIONS O17, O18). F5(계획 전 셸 판정 2차)도 끝났다(PROGRESS.md "F5" 절, O19, O20).
+`dcode-a`(M7 `4235bca` 릴리스본)를 실제 작업에 써 보다가 나온 문제다. M8을 끝낸 뒤, M9 전후에 처리한다. 처리하면 PROGRESS.md에 결과를 적고 여기서 지운다. F1, F3과 F2의 조사·문서화는 끝났다(PROGRESS.md "F1–F3" 절, DECISIONS O17, O18). F5(계획 전 셸 판정 2차)도 끝났다(PROGRESS.md "F5" 절, O19, O20). F7(계획 전 execute 읽기 전용 샌드박스)도 끝났다(PROGRESS.md "F7" 절, O26~O32). 남은 일은 아래 F7 절.
 
 ## F2. auto 모드 분류기가 시간 초과로 호출을 거부한다 (남은 일)
 
@@ -11,13 +11,28 @@
 
 ## F4. 업스트림 읽기 전용 판정에 남은 우회 (F1 리뷰에서 발견)
 
+- [F7] 계획 전 `execute`는 이제 샌드박스에서 돈다. 아래 우회는 샌드박스를 못 쓰는 환경(탐침 실패, `DEEPAGENTS_CODE_PLAN_SANDBOX=0`, 원격 샌드박스), 승인 뒤 J4 없이 통과하는 `read_only_shell`, auto 모드 결정적 허용에만 남는다.
+
 - 본 것: 업스트림 `config.is_shell_command_allowed`는 `cat () ( touch x ) && cat`(허용 이름의 함수 정의)을 허용하고, `auto_mode._fixed_repo_command_allowed`는 `git diff *`를 허용한다(glob이 `--output=x` 파일 이름을 옵션으로 펼쳐 쓴다). [F5] 같은 함수가 `git log {--output=f,HEAD}`(중괄호 펼침), `git log $@--output=f`(`$@`, `$1`은 업스트림 `contains_dangerous_patterns`가 안 막음)도 허용한다(임시 저장소에서 파일이 써짐). 계획 게이트(`policy.is_read_only_shell`)에서는 막았지만 업스트림의 비대화형 `--shell-allow-list recommended` 자동 승인과 auto 모드의 결정적 허용은 그대로다. `hostname <이름>`도 허용 목록에 있어 root로 돌면 호스트 이름을 바꾼다(게이트에도 남음, 쓰기 파일은 아님).
 - 할 일: 업스트림에 고치려면 SPEC 13장 절차와 baseline. 게이트 쪽 `hostname` 인자 거부는 필요해지면 `_read_only_chain`과 2)에 같이 넣는다.
 
 ## F6. 계획 전 git 판정 확장의 남은 일
+
+- [F7] 계획 전 git은 이제 샌드박스에서 돌아 아래 판정 표는 샌드박스를 못 쓸 때와 승인 뒤에만 쓰인다. 첫 항목(거부 문장으로 재시도가 멈추는가)은 그 경우에만 의미가 있다.
 
 - 실제 모델(glm-5.3-flash)이 하위 명령 이름이 든 새 거부 문장을 보고 git 형태를 바꿔 재시도하는 일을 멈추는지 실사용에서 본다.
 - auto 모드 결정적 허용(업스트림 `_GIT_READ_OPTIONS`)에는 묶음과 추가 하위 명령이 없어 분류기로 간다. 넓히려면 SPEC 13장 절차와 baseline.
 - rev-list `-8`은 업스트림 `_git_option_allowed`가 log에서만 받아 거부된다(`-n 8`은 받음). 실사용에서 나오면 우리 루프에서 따로 받는다.
 - `git log -1 … | cat`이 실사용에서 거부된 원인을 체크포인트 원문으로 확인한다(문자열 자체는 F5부터 허용).
 - branch `--format=%(signature)`, blame textconv, 업스트림 `log --format=%G?`는 저장소·사용자 설정의 `gpg.program`, textconv를 돌린다. 루트 설정을 믿는 전제(O17)가 바뀌면 같이 다시 본다.
+
+## F7. 계획 전 execute 읽기 전용 샌드박스의 남은 일
+
+- 일반 Ubuntu 23.10+(AppArmor `apparmor_restrict_unprivileged_userns=1`)에서 탐침이 실패해 정적 판정으로 넘어가는지 확인한다. 넘어가면 동작은 F6 그대로다. 샌드박스를 쓰려면 AppArmor 프로필이 필요하다.
+- 실사용에서 모델이 "Read-only file system"을 보고 같은 쓰기를 반복하는지 본다. 샌드박스 안 실패는 `gate_denies`로 세지 않는다(O28).
+- 비밀 읽기: 계획 전에도 `~/.ssh`, `.env`를 읽을 수 있다. 막으려면 런처에서 그 경로에 tmpfs를 올린다. (같은 uid 프로세스의 `/proc/<pid>/environ`은 리뷰 뒤 PID 네임스페이스로 가렸다.)
+- 프로젝트 `.env`가 `DEEPAGENTS_CODE_PLAN_SANDBOX=0`(정적 판정으로 내려감)이나 `DEEPAGENTS_CODE_PLAN_GATE=0`(게이트 꺼짐, F7 전부터)을 넣을 수 있다. `read_project_dotenv` 기본값이 켜짐이고 `config._DOTENV_DENIED_ENV_KEYS`에 둘 다 없다. 넣으면 전역 `~/.deepagents/.env`에서도 못 쓰게 되니 프로젝트 파일만 막을지 정한다(업스트림 수정, baseline 필요).
+- 장치 파일: 읽기 전용 마운트는 장치 쓰기를 막지 않는다. `/dev/dxg`(WSL GPU)가 샌드박스 안에서 열린다. 지속되는 부작용은 찾지 못했다.
+- 명령이 `-`로 시작하면 `sh -c -x`처럼 셸 옵션으로 읽혀 실패한다(업스트림 `shell=True`와 같다. 탈출은 아님).
+- aarch64: seccomp 번호와 arch 값을 더하면 쓸 수 있다. 지금은 탐침 전에 정적 판정으로 넘어간다.
+- PreToolUse 훅은 감싼 명령을 본다(O27). 훅 사용자가 생기면 원래 명령을 따로 넘길지 본다.

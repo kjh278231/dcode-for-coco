@@ -495,6 +495,9 @@ PLAN_GATE = "DEEPAGENTS_CODE_PLAN_GATE"
 PLAN_GATE_JEV_THRESHOLD = "DEEPAGENTS_CODE_PLAN_GATE_JEV_THRESHOLD"
 """Jev probability cutoff for the plan gate (default 0.5, must be in (0, 1])."""
 
+PLAN_SANDBOX = "DEEPAGENTS_CODE_PLAN_SANDBOX"
+"""Set to `0` or `false` to judge pre-plan `execute` statically, not in the sandbox."""
+
 PROVIDER_TOOL_SEARCH = "DEEPAGENTS_CODE_PROVIDER_TOOL_SEARCH"
 """Toggle native MCP tool discovery on verified endpoints (defaults to on)."""
 

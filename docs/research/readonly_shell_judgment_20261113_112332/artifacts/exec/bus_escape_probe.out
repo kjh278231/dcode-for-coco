@@ -1,0 +1,7 @@
+--- systemd user bus escape from mount_setattr launcher (only /run/WSL hidden)
+systemd_run_exit=0
+file created outside sandbox: /tmp/claude-1000/-home-sds-workspace-dcode-assistant/42a5f28c-97ea-408f-94e8-50894c106a4a/scratchpad/bus_escape_probe.txt
+--- same with /run hidden by tmpfs
+Failed to connect to bus: No such file or directory
+systemd_run_exit=1
+file: ls: cannot access '/tmp/claude-1000/-home-sds-workspace-dcode-assistant/42a5f28c-97ea-408f-94e8-50894c106a4a/scratchpad/bus_escape_probe.txt': No such file or directory

@@ -1,0 +1,88 @@
+{
+  "session_id": "readonly_shell_judgment_20261113_112332",
+  "ledger_schema": 2,
+  "topic": "How coding agents decide whether a shell command is read-only / safe without approval (2025-2026)",
+  "created_at": "2026-11-13T02:23:32Z",
+  "updated_at": "2026-11-13T03:40:00Z",
+  "status": "COMPLETED",
+  "current_phase": 7,
+  "exec_mode": "batch",
+  "requirements": {
+    "focus": [
+      "technical deep-dive"
+    ],
+    "output_format": "executive_summary + compact full report",
+    "scope": {
+      "timeframe": {
+        "from": "2025-01",
+        "to": "2026-11"
+      }
+    },
+    "sources": {
+      "required_types": [
+        "official_docs",
+        "repository",
+        "official_release"
+      ],
+      "min_quality": "B"
+    },
+    "audience": "developers",
+    "special_requirements": [
+      "Korean final report",
+      "recommendation for dcode-assistant (Linux/WSL2, dash, subprocess shell=True)",
+      "max 5 concurrent agents",
+      "never ask user"
+    ]
+  },
+  "plan": {
+    "file": "artifacts/research_plan.json"
+  },
+  "progress": {
+    "phase_1": "completed",
+    "phase_2": "completed",
+    "phase_3": "completed",
+    "phase_4": "completed",
+    "phase_5": "completed",
+    "phase_6": "completed",
+    "phase_7": "completed"
+  },
+  "sources_count": 94,
+  "artifacts": {
+    "agent_results": "artifacts/agent_results/",
+    "exec": "artifacts/exec/",
+    "ledger": "artifacts/claim_ledger.jsonl",
+    "expansion_log": "artifacts/expansion_log.md"
+  },
+  "errors": [
+    {
+      "phase": 6,
+      "step": "snapshot_sources.py",
+      "exit": 2,
+      "msg": "insane-search engine not found"
+    }
+  ],
+  "limitations": [
+    "insane-search engine not installed: snapshot_sources.py exit 2; every high-risk claim lacks a raw snapshot and is unresolved by the evidence rule (not bypassed).",
+    "GitHub REST API rate-limited and gh not installed; some advisories/PR pages read via raw files or third-party mirrors.",
+    "Expansion stopped at depth 1; remaining leads listed in artifacts/expansion_log.md (caller forbids asking to extend).",
+    "Several agent quotes came via WebFetch summarizer ([relayed]) and were not byte-checked."
+  ],
+  "verification": {
+    "passed": true,
+    "signature": "5b82a5788c6e370caf5b0ae0bcd67346f1490271a55fb66ec33d651073c8b117",
+    "verified_count": 29,
+    "unresolved_count": 35,
+    "refuted_count": 0,
+    "unresolved_ratio": 0.5469,
+    "blocked": null,
+    "checked_at": "2026-11-13T02:58:40.488974+00:00",
+    "checker": "validate_ledger.py"
+  },
+  "report_verification": {
+    "passed": true,
+    "citation_coverage": 1.0,
+    "violation_count": 0,
+    "checked_at": "2026-11-13T02:58:40.516345+00:00",
+    "checker": "verify_report.py"
+  }
+}

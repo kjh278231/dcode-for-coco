@@ -1,0 +1,98 @@
+# Bibliography
+
+All sources registered for this session (id, org, type, grade, date, URL). Grades: one per domain, per quality_rubric.md.
+
+- **src_l01** — Landlock read-only probe run (run_tests.sh) — local-experiment — primary — B — 2026-11-13 — file:///home/sds/workspace/dcode-assistant/docs/research/readonly_shell_judgment_20261113_112332/artifacts/exec/run_tests.out
+- **src_l02** — Landlock gaps probe (chmod/utime/unix socket) — local-experiment — primary — B — 2026-11-13 — file:///home/sds/workspace/dcode-assistant/docs/research/readonly_shell_judgment_20261113_112332/artifacts/exec/metadata_socket_probe.out
+- **src_l03** — Read-only bind mount probe — local-experiment — primary — B — 2026-11-13 — file:///home/sds/workspace/dcode-assistant/docs/research/readonly_shell_judgment_20261113_112332/artifacts/exec/ro_mount_socket_probe.out
+- **src_l04** — WSL interop probe under Landlock — local-experiment — primary — B — 2026-11-13 — file:///home/sds/workspace/dcode-assistant/docs/research/readonly_shell_judgment_20261113_112332/artifacts/exec/wsl_interop_probe.out
+- **src_l05** — userns rbind + ro remount probe — local-experiment — primary — B — 2026-11-13 — file:///home/sds/workspace/dcode-assistant/docs/research/readonly_shell_judgment_20261113_112332/artifacts/exec/userns_ro_bind.out
+- **src_l06** — Landlock on drvfs /mnt/c and /dev/shm — local-experiment — primary — B — 2026-11-13 — file:///home/sds/workspace/dcode-assistant/docs/research/readonly_shell_judgment_20261113_112332/artifacts/exec/drvfs_probe.out
+- **src_l07** — Recursive read-only mount launcher probe — local-experiment — primary — B — 2026-11-13 — file:///home/sds/workspace/dcode-assistant/docs/research/readonly_shell_judgment_20261113_112332/artifacts/exec/mount_setattr_probe.out
+- **src_l09** — Final prototype launcher probe (ro_launcher.py) — local-experiment — primary — B — 2026-11-13 — file:///home/sds/workspace/dcode-assistant/docs/research/readonly_shell_judgment_20261113_112332/artifacts/exec/ro_launcher_probe.out
+- **src_l08** — systemd user bus escape probe — local-experiment — primary — B — 2026-11-13 — file:///home/sds/workspace/dcode-assistant/docs/research/readonly_shell_judgment_20261113_112332/artifacts/exec/bus_escape_probe.out
+- **src_a01** — Claude Code docs: Permissions — anthropic — official_docs — B — undated — https://code.claude.com/docs/en/permissions.md
+- **src_a02** — Claude Code docs: Permission modes — anthropic — official_docs — B — undated — https://code.claude.com/docs/en/permission-modes.md
+- **src_a03** — Claude Code docs: Sandboxing — anthropic — official_docs — B — undated — https://code.claude.com/docs/en/sandboxing.md
+- **src_a04** — sandbox-runtime README — anthropic — repository — B — undated — https://github.com/anthropic-experimental/sandbox-runtime
+- **src_a05** — Beyond permission prompts: Claude Code sandboxing — anthropic — official_blog — B — 2025-10-20 — https://www.anthropic.com/engineering/claude-code-sandboxing
+- **src_a06** — Claude Code CHANGELOG — anthropic — official_release — B — 2026-11 — https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md
+- **src_a07** — An Evening with Claude Code — specterops — blog — D — 2025-11-21 — https://specterops.io/blog/2025/11/21/an-evening-with-claude-code/
+- **src_a08** — Pwning Claude Code in 8 different ways — gmo-flatt-security — blog — D — 2026-01-12 — https://flatt.tech/research/posts/pwning-claude-code-in-8-different-ways
+- **src_a09** — InversePrompt: CVE-2025-54795 — cymulate — blog — D — undated — https://cymulate.com/blog/cve-2025-547954-54795-claude-inverseprompt/
+- **src_a10** — Claude Code exfiltration via DNS requests — embrace-the-red — blog — D — 2025-08-11 — https://embracethered.com/blog/posts/2025/claude-code-exfiltration-via-dns-requests/
+- **src_a11** — Claude Code bash security (leaked-source analysis) — finisky — blog — D — 2026-04-05 — https://finisky.github.io/en/claude-code-bash-security
+- **src_a12** — Claude Code sandbox: close the gaps before you auto-allow — arrange-act-assert — blog — D — 2026-06-30 — https://arrangeactassert.com/posts/claude-code-sandbox-close-the-gaps-before-you-auto-allow/
+- **src_a13** — NVD CVE-2025-66032 — nist — government — A — 2025-12-03 — https://nvd.nist.gov/vuln/detail/CVE-2025-66032
+- **src_a14** — NVD CVE-2025-64755 — nist — government — A — 2025-11-21 — https://nvd.nist.gov/vuln/detail/CVE-2025-64755
+- **src_a15** — GHSA-xq4m-mc3c-vvg3 — anthropic — advisory — B — 2025-12-03 — https://github.com/anthropics/claude-code/security/advisories/GHSA-xq4m-mc3c-vvg3
+- **src_a16** — Claude Code Plan Mode (2026 guide) — alexcloudstar — blog — D — 2026 — https://alexcloudstar.com/md/blog/claude-code-plan-mode-2026/
+- **src_a17** — Claude Code issue #45072 mirror: seccomp change broke Windows tools from WSL — claudeissues — forum — E — 2026 — https://claudeissues.com/issue/45072-bug-recent-seccomp-change-for-sandbox-broke-executing-windows-tools-from-wsl
+- **src_a18** — OSV CVE-2025-66032 — osv — advisory — B — 2025-12-03 — https://osv.dev/vulnerability/CVE-2025-66032
+- **src_b01** — Codex PR #39630: retire untrusted / remove known-safe allowlist — openai — repository — B — 2026-08-20 — https://github.com/openai/codex/commit/942af8447b1d1addc81fb3c3135293497d479a06
+- **src_b02** — Codex PR #39524: remove Git from safe list — openai — repository — B — 2026-08-19 — https://github.com/openai/codex/commit/3b45c29062ff0e76e71c91b6753290400e7fa8da
+- **src_b03** — Codex bash.rs (tree-sitter plain-command parser) — openai — repository — B — 2026-11-13 — https://raw.githubusercontent.com/openai/codex/553c764e8b99fa519e9c6eb9b657875ef0f5e1c1/codex-rs/shell-command/src/bash.rs
+- **src_b04** — Codex linux-sandbox README — openai — repository — B — 2026-11-13 — https://raw.githubusercontent.com/openai/codex/553c764e8b99fa519e9c6eb9b657875ef0f5e1c1/codex-rs/linux-sandbox/README.md
+- **src_b05** — Codex docs: Sandboxing — openai — official_docs — B — undated — https://learn.chatgpt.com/docs/sandboxing
+- **src_b06** — Codex docs: Agent approvals & security — openai — official_docs — B — undated — https://learn.chatgpt.com/docs/agent-approvals-security
+- **src_b07** — Codex exec_policy.rs — openai — repository — B — 2026-11-13 — https://raw.githubusercontent.com/openai/codex/553c764e8b99fa519e9c6eb9b657875ef0f5e1c1/codex-rs/core/src/exec_policy.rs
+- **src_b08** — Codex untrusted approval policy retired — blakecrosley — blog — D — 2026-08-25 — https://blakecrosley.com/blog/codex-untrusted-approval-policy-retired
+- **src_b09** — Codex CLI sandbox permission hardening — danielvaughan — blog — D — 2026-08-31 — https://codex.danielvaughan.com/2026/08/31/codex-cli-sandbox-permission-hardening-full-auto-removed-untrusted-retired-fail-closed/
+- **src_b10** — GHSA-w5fx-fh39-j5rw — openai — advisory — B — 2025-09-19 — https://github.com/openai/codex/security/advisories/GHSA-w5fx-fh39-j5rw
+- **src_b11** — NVD CVE-2025-59532 — nist — government — A — 2025-09-22 — https://nvd.nist.gov/vuln/detail/CVE-2025-59532
+- **src_b12** — NVD CVE-2026-19591 — nist — government — A — 2026-09-01 — https://nvd.nist.gov/vuln/detail/CVE-2026-19591
+- **src_b13** — Codex Plan Mode template — openai — repository — B — 2026-11-13 — https://raw.githubusercontent.com/openai/codex/553c764e8b99fa519e9c6eb9b657875ef0f5e1c1/codex-rs/collaboration-mode-templates/templates/plan.md
+- **src_b14** — GitPwned: allowlist to RCE — pillar-security — blog — D — 2026-07-20 — https://www.pillar.security/blog/gitpwned-allowlist-to-rce
+- **src_b15** — Codex CLI sandbox internals — danielvaughan — blog — D — 2026-05-03 — https://codex.danielvaughan.com/2026/05/03/codex-cli-sandbox-internals-seatbelt-bubblewrap-landlock-windows-dacl/
+- **src_b16** — NVD CVE-2026-19592 — nist — government — A — 2026-09-01 — https://nvd.nist.gov/vuln/detail/CVE-2026-19592
+- **src_b17** — Codex CLI execution policy rules (May 2026) — danielvaughan — blog — D — 2026-05-21 — https://codex.danielvaughan.com/2026/05/21/codex-cli-execution-policy-rules-starlark-command-governance-enterprise-allowlists/
+- **src_b18** — Planning Mode in Practice (Codex) — danielvaughan — blog — D — 2026-03-27 — https://codex.danielvaughan.com/2026/03/27/planning-mode-in-practice/
+- **src_b19** — OpenAI advisory CVE-2026-19592 — openai — advisory — B — 2026-09 — https://openai.com/security/advisories/cve-2026-19592/
+- **src_x01** — CSA: GitSpawn malicious git configs hijack AI coding agents — cloud-security-alliance — blog — D — 2026-09-04 — https://labs.cloudsecurityalliance.org/research/csa-research-note-ai-coding-agent-git-config-rce-20260904-cs/
+- **src_x02** — Launchpad bug 2046477: enable unprivileged userns restrictions by default — canonical-launchpad — forum — C — 2024 — https://bugs.launchpad.net/bugs/2046477
+- **src_x03** — SecurityBrief: Tracebit finds Gemini CLI vulnerability — securitybrief — news — D — 2025-07 — https://securitybrief.asia/story/tracebit-finds-major-vulnerability-in-google-gemini-cli-tool
+- **src_x04** — NVD CVE-2025-54131 — nist — government — A — 2025-08-01 — https://nvd.nist.gov/vuln/detail/CVE-2025-54131
+- **src_x05** — NVD CVE-2026-29783 — nist — government — A — 2026-03-06 — https://nvd.nist.gov/vuln/detail/CVE-2026-29783
+- **src_x06** — CSA: GuardFall research note — cloud-security-alliance — blog — D — 2026-07 — https://labs.cloudsecurityalliance.org/research/csa-research-note-guardfall-ai-coding-agent-shell-injection/
+- **src_x07** — Unofficial Claude Code source dump: prefix.ts — unofficial-mirror — forum — E — undated — https://tangled.org/oppi.li/claude-code/blob/main/utils/shell/prefix.ts
+- **src_x08** — NHIMG: Codex CLI sandbox escapes — nhimg — blog — D — 2026 — https://nhimg.org/articles/codex-cli-sandbox-escapes-show-why-model-behaviour-is-not-control/
+- **src_x09** — Landlock-Sharp: ABI versions — curiosity — blog — D — undated — https://docs.curiosity.ai/landlock-sharp/core-concepts/abi-versions
+- **src_e01** — Prompt injection to RCE in AI agents — trail-of-bits — blog — C — 2025-10-22 — https://blog.trailofbits.com/2025/10/22/prompt-injection-to-rce-in-ai-agents/
+- **src_e02** — ShellSieve (agent command denylists) — arxiv-chen-lin — blog — D — 2026-06-14 — https://arxiv.org/abs/2606.15549
+- **src_e03** — landlock(7) — man-pages — official_docs — B — 2026-07-18 — https://man7.org/linux/man-pages/man7/landlock.7.html
+- **src_e04** — Landlock: unprivileged access control (kernel docs) — kernel.org — official_docs — B — 2026-10-20 — https://docs.kernel.org/userspace-api/landlock.html
+- **src_e05** — WSL2 kernel config-wsl — microsoft — repository — B — 2025-11-17 — https://raw.githubusercontent.com/microsoft/WSL2-Linux-Kernel/linux-msft-wsl-6.6.y/arch/x86/configs/config-wsl
+- **src_e06** — bubblewrap README — containers — repository — B — 2026-09-16 — https://github.com/containers/bubblewrap
+- **src_e07** — Three bypasses of Ubuntu unprivileged userns restrictions — qualys — advisory — C — 2025-03 — https://www.qualys.com/2025/three-bypasses-of-Ubuntu-unprivileged-user-namespace-restrictions.txt
+- **src_e08** — Cursor: agent sandboxing — cursor — official_blog — B — 2026-02-18 — https://cursor.com/blog/agent-sandboxing
+- **src_c01** — Gemini CLI shell-utils.ts — google — repository — B — 2026-11 — https://raw.githubusercontent.com/google-gemini/gemini-cli/b9776560ea5710bc673891499aaec68c737d160a/packages/core/src/utils/shell-utils.ts
+- **src_c02** — Gemini CLI plan-mode policy — google — repository — B — 2026-11 — https://raw.githubusercontent.com/google-gemini/gemini-cli/b9776560ea5710bc673891499aaec68c737d160a/packages/core/src/policy/policies/plan.toml
+- **src_c03** — Gemini CLI commandSafety.ts — google — repository — B — 2026-11 — https://raw.githubusercontent.com/google-gemini/gemini-cli/b9776560ea5710bc673891499aaec68c737d160a/packages/core/src/sandbox/utils/commandSafety.ts
+- **src_c04** — Gemini CLI sandbox docs — google — repository — B — 2026-11 — https://raw.githubusercontent.com/google-gemini/gemini-cli/b9776560ea5710bc673891499aaec68c737d160a/docs/cli/sandbox.md
+- **src_c05** — Tracebit: Gemini CLI code execution via allowlist — tracebit — blog — D — 2025-07 — https://tracebit.com/blog/code-exec-deception-gemini-ai-cli-hijack
+- **src_c06** — Cursor docs: Sandbox — cursor — official_docs — B — undated — https://cursor.com/docs/reference/sandbox.md
+- **src_c07** — Cursor docs: Run modes — cursor — official_docs — B — undated — https://cursor.com/docs/agent/security/run-modes.md
+- **src_c08** — Cursor GHSA-82wg-qcm4-fp2w (CVE-2026-26268) — cursor — advisory — B — 2026-01-14 — https://github.com/cursor/cursor/security/advisories/GHSA-82wg-qcm4-fp2w
+- **src_c09** — Backslash: Cursor auto-run denylist bypasses — backslash — blog — D — 2025-07 — https://www.backslash.security/blog/cursor-ai-security-flaw-autorun-denylist
+- **src_c10** — Cursor GHSA-534m-3w6r-8pqr (CVE-2025-54131) — cursor — advisory — B — 2025-08-01 — https://github.com/cursor/cursor/security/advisories/GHSA-534m-3w6r-8pqr
+- **src_c11** — Pillar: trusted commands in Cursor (CVE-2026-22708) — pillar-security — blog — D — 2026 — https://pillar.security/blog/the-agent-security-paradox-when-trusted-commands-in-cursor-become-attack-vectors
+- **src_c12** — VS Code docs: approvals — microsoft — official_docs — B — undated — https://code.visualstudio.com/docs/agents/run/approvals.md
+- **src_c13** — VS Code defaultAutoApproveRules.ts — microsoft — repository — B — 2026-11 — https://raw.githubusercontent.com/microsoft/vscode/main/src/vs/platform/terminal/common/autoApprove/defaultAutoApproveRules.ts
+- **src_c14** — VS Code docs: agent sandboxing — microsoft — official_docs — B — undated — https://code.visualstudio.com/docs/agents/run/agent-sandboxing.md
+- **src_c15** — Copilot CLI command reference — github — official_docs — B — undated — https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference
+- **src_c16** — Copilot CLI GHSA-g8r9-g2v8-jv6f (CVE-2026-29783) — github — advisory — B — 2026-03-06 — https://github.com/github/copilot-cli/security/advisories/GHSA-g8r9-g2v8-jv6f
+- **src_c17** — NVD CVE-2026-45033 (Copilot CLI nested bare repo) — nist — government — A — 2026-05-13 — https://nvd.nist.gov/vuln/detail/CVE-2026-45033
+- **src_c18** — Copilot docs: assisted permissions — github — official_docs — B — undated — https://docs.github.com/en/copilot/concepts/customizations/allowing-safe-commands
+- **src_d01** — OpenHands runtimes overview — openhands — official_docs — B — undated — https://docs.openhands.dev/openhands/usage/runtimes/overview.md
+- **src_d02** — OpenHands planning preset — openhands — repository — B — 2026-11 — https://raw.githubusercontent.com/OpenHands/software-agent-sdk/main/openhands-tools/openhands/tools/preset/planning.py
+- **src_d03** — Aider io.py — aider — repository — B — 2026-11 — https://raw.githubusercontent.com/Aider-AI/aider/main/aider/io.py
+- **src_d04** — Cline SDK command-guard.ts — cline — repository — B — 2026-11 — https://raw.githubusercontent.com/cline/cline/main/sdk/packages/core/src/extensions/tools/command-guard.ts
+- **src_d05** — Cline docs: plan and act — cline — repository — B — 2026-11 — https://raw.githubusercontent.com/cline/cline/main/docs/core-workflows/plan-and-act.mdx
+- **src_d06** — Roo Code mode.ts — roocode — repository — B — 2026 — https://raw.githubusercontent.com/RooCodeInc/Roo-Code/main/packages/types/src/mode.ts
+- **src_d07** — Roo Code parse-command.ts — roocode — repository — B — 2026 — https://raw.githubusercontent.com/RooCodeInc/Roo-Code/main/src/shared/parse-command.ts
+- **src_d08** — opencode docs: agents — opencode — official_docs — B — undated — https://opencode.ai/v1/docs/agents.md
+- **src_d09** — Goose permissions — goose — official_docs — B — undated — https://goose-docs.ai/docs/guides/managing-tools/goose-permissions
+- **src_d10** — Continue evaluateTerminalCommandSecurity.ts — continue — repository — B — 2026-11 — https://raw.githubusercontent.com/continuedev/continue/main/packages/terminal-security/src/evaluateTerminalCommandSecurity.ts
+- **src_d11** — Adversa GuardFall — adversa — blog — D — 2026-06-30 — https://adversa.ai/blog/opensource-ai-coding-agents-shell-injection-vulnerability/
+- **src_d12** — Amp manual — amp — official_docs — B — undated — https://ampcode.com/manual.md
+- **src_d13** — Zed tool permissions — zed — official_docs — B — undated — https://zed.dev/docs/ai/tool-permissions

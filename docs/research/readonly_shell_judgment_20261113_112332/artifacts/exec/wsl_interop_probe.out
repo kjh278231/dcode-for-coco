@@ -1,0 +1,12 @@
+--- WSL interop: Windows binary launched under Landlock
+interop-ran 
+exit=0
+-rwxrwxrwx 1 sds sds 4 Nov 13 11:37 /mnt/c/Users/Public/ll_interop_probe.txt
+--- same, with WSL_INTEROP unset
+interop-ran
+exit=0
+--- interop with /run/WSL hidden by tmpfs in a user+mount namespace, plus Landlock
+mount: /run/WSL: must be superuser to use mount.
+       dmesg(1) may have more information after failed mount system call.
+<3>WSL (1606526 - ) ERROR: UtilGetPpid:1290: Failed to parse: /proc/1/stat, content: 1 (systemd) S 0 1 1 0 -1 4194560 120767 45008204 225 20035 474 348 69465 26324 20 0 1 0 122 22781952 2464 18446744073709551615 1 1 0 0 0 0 671173123 4096 1260 0 0 0 17 13 0 0 0 0 0 0 0 0 0 0 0 0 0
+exit=1

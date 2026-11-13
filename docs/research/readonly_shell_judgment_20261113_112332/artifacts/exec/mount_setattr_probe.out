@@ -1,0 +1,20 @@
+--- mount_setattr(AT_RECURSIVE, RDONLY) in userns+mountns+netns
+sh: 1: cannot create out.txt: Read-only file system
+chmod: changing permissions of 'f': Read-only file system
+touch: cannot touch 'f': Read-only file system
+sh: 1: cannot create /dev/shm/ms_probe: Read-only file system
+touch: cannot touch '/mnt/c/Users/Public/ms_probe': Read-only file system
+ok
+## master
+?? docs/research/readonly_shell_judgment_20261113_112332/
+8.2.8
+OSError: [Errno 101] Network is unreachable
+<3>WSL (1614597 - ) ERROR: UtilGetPpid:1290: Failed to parse: /proc/1/stat, content: 1 (systemd) S 0 1 1 0 -1 4194560 121214 45018521 250 20080 475 351 69488 26331 20 0 1 0 122 22618112 1716 18446744073709551615 1 1 0 0 0 0 671173123 4096 1260 0 0 0 17 5 0 0 0 0 0 0 0 0 0 0 0 0 0
+<3>WSL (1614597 - ) ERROR: UtilConnectUnix:533: connect failed 2
+interop_exit=1
+after: mode=644 files=f  shm=ls: cannot access '/dev/shm/ms_probe': No such file or directory mntc=ls: cannot access '/mnt/c/Users/Public/ms_probe': No such file or directory
+--- same launcher: /dev/null redirect, pathname unix socket, time
+devnull-ok
+connect_exit=0
+server file: via-unix-socket
+10 runs elapsed=0.15

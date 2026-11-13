@@ -1,0 +1,6 @@
+chmod: changing permissions of 'f': Read-only file system
+exit_chmod=1
+touch: cannot touch 'f': Read-only file system
+exit_touch=1
+exit_connect=0
+mode: 644  server file: via-unix-socket

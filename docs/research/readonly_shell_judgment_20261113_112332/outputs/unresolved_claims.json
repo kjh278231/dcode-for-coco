@@ -1,0 +1,809 @@
+[
+  {
+    "claim_id": "clm_011",
+    "text": "Claude Code는 복합 명령을 &&, ||, ;, |, &, 줄바꿈으로 나누고 모든 하위 명령이 허용돼야 프롬프트 없이 실행하며, 해석할 수 없는 명령은 읽기 전용으로 보지 않고 묻는다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_a01"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_013",
+    "text": "Claude Code에서 python -c는 내장 읽기 전용 목록에 없어서 plan 모드에서는 묻거나 분류기로 가고, 샌드박스 자동 허용은 plan 모드 밖에서만 python3 -c를 프롬프트 없이 실행한다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_a02",
+      "src_a03",
+      "src_a06"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_014",
+    "text": "Claude Code는 CVE-2025-66032 이후 v1.0.93에서 읽기 전용 명령 검증을 블록리스트에서 허용 목록 방식으로 바꿨다",
+    "risk": "high",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_a08",
+      "src_a13",
+      "src_a15"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2025-12-03",
+    "counter_search": {
+      "query": "Claude Code CVE-2025-66032 not fixed bypass allowlist v1.0.93 dispute",
+      "urls": [
+        "https://osv.dev/vulnerability/CVE-2025-66032"
+      ],
+      "summary": "No dispute found; aggregators agree fixed in 1.0.93 (one stale aggregator says no fix)."
+    },
+    "evidence": [
+      {
+        "source_id": "src_a08",
+        "quote": "Anthropic was very responsive and addressed these issues by introducing an allowlist approach instead of the previous blocklist approach."
+      }
+    ],
+    "evidence_check": {
+      "passed": 0,
+      "failed": 1,
+      "reasons": [
+        "src_a08: 원문 스냅샷 없음 (status=missing)"
+      ]
+    },
+    "status": "unresolved",
+    "status_reason": "high-risk evidence 대조 통과 0건 — src_a08: 원문 스냅샷 없음 (status=missing)",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_015",
+    "text": "2025년 Claude Code는 Bash 명령마다 Haiku 모델에 접두사 추출을 요청했고 주입이 의심되면 command_injection_detected를 받아 프롬프트를 띄웠다",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_a07",
+      "src_a06"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2025-11-21",
+    "counter_search": {
+      "query": "Claude Code Haiku command prefix detection command_injection_detected removed 2026",
+      "urls": [
+        "https://tangled.org/oppi.li/claude-code/blob/main/utils/shell/prefix.ts"
+      ],
+      "summary": "Only unofficial source-dump mirrors (one labelled v2.1.20) still show the step; no official source says it was removed or kept."
+    },
+    "evidence": [
+      {
+        "source_id": "src_a07",
+        "quote": "Claude Code Code Bash command prefix detection"
+      }
+    ],
+    "evidence_check": {
+      "passed": 0,
+      "failed": 1,
+      "reasons": [
+        "src_a07: 원문 스냅샷 없음 (status=missing)"
+      ]
+    },
+    "status": "unresolved",
+    "status_reason": "high-risk evidence 대조 통과 0건 — src_a07: 원문 스냅샷 없음 (status=missing)",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_019",
+    "text": "Claude Code는 모르는 AST 노드나 파서 시간 초과를 too-complex로 보고 사용자에게 묻는 fail-closed 구조다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_a11"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": false
+  },
+  {
+    "claim_id": "clm_017",
+    "text": "Anthropic은 사내 사용에서 샌드박스가 권한 프롬프트를 84% 줄였다고 밝혔다",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_a05"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2025-10-20",
+    "counter_search": {
+      "query": "Claude Code sandboxing 84% fewer permission prompts independent measurement",
+      "urls": [
+        "https://www.anthropic.com/engineering/claude-code-sandboxing"
+      ],
+      "summary": "Every source traces the 84% figure to Anthropic internal usage; no independent replication."
+    },
+    "evidence": [
+      {
+        "source_id": "src_a05",
+        "quote": "In our internal usage, we've found that sandboxing safely reduces permission prompts by 84%."
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_018",
+    "text": "Claude Code의 2025-2026 읽기 전용 검증 우회 CVE는 echo(CVE-2025-54795), DNS 유출 허용 목록(CVE-2025-55284), $IFS·짧은 플래그(CVE-2025-66032), sed(CVE-2025-64755), find(CVE-2026-24887), zsh clobber(CVE-2026-24053) 등 10건 이상이다",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_a13",
+      "src_a14",
+      "src_a15",
+      "src_a08",
+      "src_a10"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "counter_search": {
+      "query": "Claude Code CVE-2025-66032 not fixed bypass allowlist v1.0.93 dispute",
+      "urls": [
+        "https://osv.dev/vulnerability/CVE-2025-66032"
+      ],
+      "summary": "Trackers agree on ids and fix versions."
+    },
+    "evidence": [
+      {
+        "source_id": "src_a14",
+        "quote": "Prior to version 2.0.31, due to an error in sed command parsing"
+      }
+    ],
+    "evidence_check": {
+      "passed": 0,
+      "failed": 1,
+      "reasons": [
+        "src_a14: 원문 스냅샷 없음 (status=missing)"
+      ]
+    },
+    "status": "unresolved",
+    "status_reason": "high-risk evidence 대조 통과 0건 — src_a14: 원문 스냅샷 없음 (status=missing)",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_020",
+    "text": "Codex CLI는 v0.149.0(2026-08-20, PR #39630)에서 known-safe 명령 허용 목록을 지우고 untrusted 승인 정책을 폐지했다",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_b01",
+      "src_b08",
+      "src_b09"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-08-20",
+    "counter_search": {
+      "query": "Codex CLI known safe command allowlist still auto-approves read-only commands 2026",
+      "urls": [
+        "https://blakecrosley.com/blog/codex-untrusted-approval-policy-retired",
+        "https://codex.danielvaughan.com/2026/05/21/codex-cli-execution-policy-rules-starlark-command-governance-enterprise-allowlists/"
+      ],
+      "summary": "Pre-August 2026 blogs describe the allowlist as active; later sources report the removal. Consistent with a change in v0.149.0."
+    },
+    "evidence": [
+      {
+        "source_id": "src_b01",
+        "quote": "Remove the known-safe command allowlist. Projects marked untrusted now request approval for every command unless an explicit exec policy rule allows it."
+      }
+    ],
+    "evidence_check": {
+      "passed": 0,
+      "failed": 1,
+      "reasons": [
+        "src_b01: 원문 스냅샷 없음 (status=missing)"
+      ]
+    },
+    "status": "unresolved",
+    "status_reason": "high-risk evidence 대조 통과 0건 — src_b01: 원문 스냅샷 없음 (status=missing)",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_021",
+    "text": "Codex는 저장소 설정이 읽기 전용 git 명령에서도 헬퍼를 실행시킬 수 있다는 이유로 2026-08-19 git을 안전 목록에서 뺐다",
+    "risk": "high",
+    "claim_type": "causal",
+    "source_ids": [
+      "src_b02",
+      "src_b16"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-08-19",
+    "counter_search": {
+      "query": "CVE-2026-19592 Codex core.fsmonitor git metadata",
+      "urls": [
+        "https://openai.com/security/advisories/cve-2026-19592/",
+        "https://labs.cloudsecurityalliance.org/research/csa-research-note-ai-coding-agent-git-config-rce-20260904-cs/"
+      ],
+      "summary": "OpenAI advisory and CSA note agree: repo-local core.fsmonitor ran during metadata collection, outside the sandbox; same root cause hit other agents. No contradiction."
+    },
+    "evidence": [
+      {
+        "source_id": "src_b02",
+        "quote": "Repository configuration can cause even read-only Git commands to execute helpers, so Git command arguments alone are not enough to establish trust."
+      }
+    ],
+    "evidence_check": {
+      "passed": 0,
+      "failed": 1,
+      "reasons": [
+        "src_b02: 원문 스냅샷 없음 (status=missing)"
+      ]
+    },
+    "status": "unresolved",
+    "status_reason": "high-risk evidence 대조 통과 0건 — src_b02: 원문 스냅샷 없음 (status=missing)",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_028",
+    "text": "Codex의 예전 Landlock 경로는 앱 서버 유닉스 소켓을 격리하지 못해 파일시스템 제한 정책에서 거부된다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_b04"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_023",
+    "text": "Codex에서 read-only 샌드박스와 on-request 승인 정책을 함께 쓰면 위험 목록에 걸리지 않은 명령(python 포함)은 승인 없이 샌드박스 안에서 실행된다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_b06",
+      "src_b07",
+      "src_b05",
+      "src_b08"
+    ],
+    "counter_refuted": false,
+    "conflicting": true,
+    "valid_at": "2026-11-13",
+    "counter_search": {
+      "query": "Codex CLI known safe command allowlist still auto-approves read-only commands 2026",
+      "urls": [
+        "https://blakecrosley.com/blog/codex-untrusted-approval-policy-retired"
+      ],
+      "summary": "Codex sandboxing docs page and Crosley say read-only asks before commands; approvals page and exec_policy.rs code say commands run sandboxed without approval. Unresolved conflict."
+    },
+    "status": "unresolved",
+    "status_reason": "출처 간 충돌 미해소",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_024",
+    "text": "Codex의 tree-sitter 파서는 단어만 있는 명령을 &&, ||, ;, |로 이은 경우만 받아들이고 리다이렉트, 서브셸, 치환, 글롭, $, 중괄호, 백슬래시가 있으면 거부하며, 지금은 이를 exec-policy 규칙 매칭에만 쓴다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_b03",
+      "src_b07"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_026",
+    "text": "Codex CLI의 git show --output 허용 목록 우회는 Pillar가 보고했고 2026-02-04 v0.95.0에서 고쳐졌다",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_b14"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-02-04",
+    "counter_search": {
+      "query": "Pillar Security GitPwned Codex git show --output v0.95.0",
+      "urls": [
+        "https://www.pillar.security/blog/gitpwned-allowlist-to-rce",
+        "https://nhimg.org/articles/codex-cli-sandbox-escapes-show-why-model-behaviour-is-not-control/"
+      ],
+      "summary": "Secondary coverage and Mend WS-2026-0013 repeat Pillar's dates (reported 2026-01-07, fixed v0.95.0 2026-02-04); no contradiction, no CVE id."
+    },
+    "evidence": [
+      {
+        "source_id": "src_b14",
+        "quote": "OpenAI's Codex CLI trusts git show as a safe command, but git show --output can write arbitrary content to arbitrary files"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": false
+  },
+  {
+    "claim_id": "clm_027",
+    "text": "Codex의 CVE-2026-19591은 PowerShell --% 토큰을 다르게 해석한 안전 명령 파서 때문에 파일을 쓰는 git 명령이 승인 없이 돌던 문제다",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_b12"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-09-01",
+    "counter_search": {
+      "query": "CVE-2026-19592 Codex core.fsmonitor git metadata",
+      "urls": [
+        "https://openai.com/security/advisories/cve-2026-19592/"
+      ],
+      "summary": "Search covered the 19590-19593 batch; nothing contradicts 19591, but no second org describes it."
+    },
+    "evidence": [
+      {
+        "source_id": "src_b12",
+        "quote": "misclassified certain PowerShell commands as safe"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_033",
+    "text": "Landlock 네트워크 제한은 ABI 4(커널 6.7)부터라 ABI 3 커널에서는 네트워크를 막을 수 없다",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_e03",
+      "src_e04"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-07-18",
+    "counter_search": {
+      "query": "Landlock ABI 4 network TCP restriction kernel 6.7 version table",
+      "urls": [
+        "https://docs.curiosity.ai/landlock-sharp/core-concepts/abi-versions"
+      ],
+      "summary": "Third-party doc and kernel docs agree network rules start at ABI 4 / 6.7; no contradiction."
+    },
+    "evidence": [
+      {
+        "source_id": "src_e03",
+        "quote": "LANDLOCK_ACCESS_NET_BIND_TCP"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "high-risk인데 소스 표면(type) 1종 < 2 (다중 표면 대조 미충족)",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_036",
+    "text": "Ubuntu 24.04는 AppArmor로 비특권 사용자 네임스페이스 제한을 기본으로 켜서 bwrap에 프로필이 필요할 수 있지만, 이 WSL2 커널에는 그 sysctl이 없다",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_e07",
+      "src_x02",
+      "src_a03",
+      "src_l01"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2025-03",
+    "counter_search": {
+      "query": "Ubuntu 24.04 apparmor_restrict_unprivileged_userns bubblewrap default WSL2",
+      "urls": [
+        "https://bugs.launchpad.net/bugs/2046477",
+        "https://www.qualys.com/2025/three-bypasses-of-Ubuntu-unprivileged-user-namespace-restrictions.txt"
+      ],
+      "summary": "Launchpad and Qualys agree the restriction is default on 24.04; nothing found about WSL2 specifically."
+    },
+    "evidence": [
+      {
+        "source_id": "src_e07",
+        "quote": "Ubuntu 24.04 enabled them by default."
+      }
+    ],
+    "evidence_check": {
+      "passed": 0,
+      "failed": 1,
+      "reasons": [
+        "src_e07: 원문 스냅샷 없음 (status=missing)"
+      ]
+    },
+    "status": "unresolved",
+    "status_reason": "high-risk evidence 대조 통과 0건 — src_e07: 원문 스냅샷 없음 (status=missing)",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_037",
+    "text": "Cursor는 Linux에서 Landlock과 seccomp로 에이전트 명령 샌드박스를 만들고 Windows에서는 그 Linux 샌드박스를 WSL2 안에서 돌린다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_e08"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_040",
+    "text": "Gemini CLI는 tree-sitter-bash로 명령을 나눠 부분마다 정책을 검사하고, 리다이렉트나 명령 치환이 있으면 allow를 ask로 낮추며, 파싱에 실패하면 ask(비대화형이면 deny)로 처리한다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_c01"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_041",
+    "text": "Gemini CLI plan 모드는 run_shell_command를 포함한 모든 도구를 기본으로 거부하고 사용자가 명령 접두사 허용 규칙을 추가해야 셸을 쓸 수 있다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_c02"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_042",
+    "text": "Gemini CLI의 known-safe 목록은 find(-exec 등 제외), git status/log/diff/show/branch(-c, --output 등 제외), sed -n Np만 허용하며 python 같은 인터프리터는 없다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_c03"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_043",
+    "text": "Gemini CLI의 OS 샌드박스는 기본으로 꺼져 있고 macOS Seatbelt, docker/podman, Linux 도구 단위 bubblewrap을 고를 수 있다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_c04"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_044",
+    "text": "Tracebit은 2025년 7월 Gemini CLI가 grep ...; <명령>을 grep으로 판단해 허용하는 우회를 보고했고 v0.1.14에서 고쳐졌다",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_c05",
+      "src_x03"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2025-07-25",
+    "counter_search": {
+      "query": "Tracebit Gemini CLI allowlist bypass v0.1.14 fix 2025",
+      "urls": [
+        "https://tracebit.com/blog/code-exec-deception-gemini-ai-cli-hijack",
+        "https://securitybrief.asia/story/tracebit-finds-major-vulnerability-in-google-gemini-cli-tool"
+      ],
+      "summary": "News coverage repeats Tracebit's timeline (fix in v0.1.14, 2025-07-25); no contradiction."
+    },
+    "evidence": [
+      {
+        "source_id": "src_c05",
+        "quote": "v0.1.14"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "high-risk인데 1차 소스 미도달 (PRIMARY_SOURCE_TYPES type 소스 없음)",
+    "primary_source": false
+  },
+  {
+    "claim_id": "clm_045",
+    "text": "Cursor는 Linux에서 Landlock과 seccomp(구형 커널은 bubblewrap 또는 승인 요청)로, macOS에서 Seatbelt로 명령을 샌드박스하고 Windows는 WSL2 안에서 같은 Linux 샌드박스를 쓴다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_c06",
+      "src_e08"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_046",
+    "text": "Cursor 기본 Auto-review 모드는 허용 목록 밖 명령을 프롬프트 없이 샌드박스에서 돌리고, 샌드박스할 수 없는 명령만 LLM 분류기에 보내며 이 분류기는 보안 경계가 아니라고 문서에 적혀 있다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_c07"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_047",
+    "text": "Cursor는 Backslash의 denylist 우회 보고 뒤 auto-run denylist를 폐기했고, backtick과 $() 허용 목록 우회(CVE-2025-54131)를 1.3에서 고쳤다",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_c09",
+      "src_c10",
+      "src_x04"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2025-08-01",
+    "counter_search": {
+      "query": "Cursor CVE-2025-54131 backtick allowlist bypass denylist deprecated 1.3",
+      "urls": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2025-54131"
+      ],
+      "summary": "NVD confirms backtick/$(cmd) bypass fixed in 1.3; search found nothing about denylist deprecation (Backslash only)."
+    },
+    "evidence": [
+      {
+        "source_id": "src_c10",
+        "quote": "an attacker can bypass the allow list in auto-run mode with a backtick"
+      }
+    ],
+    "evidence_check": {
+      "passed": 0,
+      "failed": 1,
+      "reasons": [
+        "src_c10: 원문 스냅샷 없음 (status=missing)"
+      ]
+    },
+    "status": "unresolved",
+    "status_reason": "high-risk evidence 대조 통과 0건 — src_c10: 원문 스냅샷 없음 (status=missing)",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_048",
+    "text": "VS Code Copilot 에이전트의 터미널 자동 승인은 tree-sitter로 모든 하위 명령을 검사하고 기본 규칙에 python 규칙이 없으며, 샌드박스(chat.agent.sandbox.enabled)는 기본으로 꺼져 있다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_c12",
+      "src_c13",
+      "src_c14"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_049",
+    "text": "Copilot CLI plan 모드는 작업 공간 파일을 바꾸는 명령을 강제로 막지만 효과를 미리 판단할 수 없는 명령은 통과시키고, assisted permissions는 LLM이 요청을 검토한다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_c15",
+      "src_c18"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_050",
+    "text": "Copilot CLI의 CVE-2026-29783은 ${var@P}, ${var=value}, ${!var} 같은 확장이 읽기 전용 분류기를 통과한 문제로, 이후 이런 패턴은 --yolo에서도 무조건 막힌다",
+    "risk": "high",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_c16",
+      "src_x05"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-03-06",
+    "counter_search": {
+      "query": "Copilot CLI CVE-2026-29783 ${var@P} dangerous expansion read-only classifier",
+      "urls": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2026-29783"
+      ],
+      "summary": "Trackers agree: affected <=0.0.422, fixed 0.0.423 (2026-03-06); no contradiction."
+    },
+    "evidence": [
+      {
+        "source_id": "src_c16",
+        "quote": "Commands with dangerous expansion patterns are unconditionally blocked at the tool execution layer"
+      }
+    ],
+    "evidence_check": {
+      "passed": 0,
+      "failed": 1,
+      "reasons": [
+        "src_c16: 원문 스냅샷 없음 (status=missing)"
+      ]
+    },
+    "status": "unresolved",
+    "status_reason": "high-risk evidence 대조 통과 0건 — src_c16: 원문 스냅샷 없음 (status=missing)",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_070",
+    "text": "OpenHands는 기본으로 Docker 샌드박스에서 명령을 돌리고, planning 에이전트 프리셋에는 터미널 도구가 아예 없다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_d01",
+      "src_d02"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_071",
+    "text": "Aider는 샌드박스와 정적 판정이 없고, LLM이 제안한 셸 명령은 항상 사용자에게 묻고 --yes-always에서도 거부한다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_d03"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_072",
+    "text": "Cline SDK plan 모드는 셸 도구를 남겨 두고 단순 블랙리스트 가드만 적용해 python -c 쓰기를 잡지 못한다고 코드 주석에 적혀 있으며, 문서는 plan 모드에서 명령을 못 돌린다고 말해 서로 어긋난다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_d04",
+      "src_d05"
+    ],
+    "counter_refuted": false,
+    "conflicting": true,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_073",
+    "text": "Roo Code의 Architect와 Ask 모드에는 명령 실행 도구 그룹이 없고, Code 모드는 parseCommand로 나눈 하위 명령마다 접두사 허용/거부 목록을 적용한다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_d06",
+      "src_d07"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_074",
+    "text": "opencode의 plan 에이전트는 bash를 제한하지 않아 기본 설정에서는 python -c도 프롬프트 없이 돈다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_d08"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_075",
+    "text": "Goose의 Smart Approve는 LLM이 각 도구 호출을 읽기 전용인지 판단하고, 정적 규칙은 기본으로 꺼진 정규식 검사뿐이다",
+    "risk": "normal",
+    "claim_type": "descriptive",
+    "source_ids": [
+      "src_d09"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-11-13",
+    "status": "unresolved",
+    "status_reason": "독립 출처(조직) 1개 < 2",
+    "primary_source": true
+  },
+  {
+    "claim_id": "clm_077",
+    "text": "Adversa GuardFall(2026-06-30)은 원문 텍스트 매칭 가드가 opencode 16/16, Goose 22/23 사례에서 뚫렸다고 보고했다",
+    "risk": "high",
+    "claim_type": "numeric",
+    "source_ids": [
+      "src_d11",
+      "src_x06"
+    ],
+    "counter_refuted": false,
+    "conflicting": false,
+    "valid_at": "2026-06-30",
+    "counter_search": {
+      "query": "Adversa GuardFall AI coding agents shell guard bypass opencode goose 2026",
+      "urls": [
+        "https://labs.cloudsecurityalliance.org/research/csa-research-note-guardfall-ai-coding-agent-shell-injection/"
+      ],
+      "summary": "CSA and news coverage repeat Adversa's numbers (16/16, 22/23); all trace to Adversa, no independent re-test."
+    },
+    "evidence": [
+      {
+        "source_id": "src_d11",
+        "quote": "16/16 leaked"
+      }
+    ],
+    "status": "unresolved",
+    "status_reason": "high-risk인데 1차 소스 미도달 (PRIMARY_SOURCE_TYPES type 소스 없음)",
+    "primary_source": false
+  }
+]

@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Any
 
+import pytest
 from deepagents.backends import CompositeBackend, LocalShellBackend
 from deepagents.middleware.filesystem import FilesystemMiddleware
 from langchain.agents import create_agent
@@ -13,7 +14,7 @@ from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
-from deepagents_code._env_vars import EXPERIMENTAL
+from deepagents_code._env_vars import EXPERIMENTAL, PLAN_SANDBOX
 from deepagents_code.agent import create_cli_agent
 from deepagents_code.assistant.decider import FakeDecider
 from deepagents_code.assistant.gate import PlanGateMiddleware, precheck_denies
@@ -33,9 +34,13 @@ from tests.unit_tests.test_end_to_end import FixedGenericFakeChatModel, mock_set
 if TYPE_CHECKING:
     from pathlib import Path
 
-    import pytest
-
     from deepagents_code.assistant.decider import Decider
+
+
+@pytest.fixture(autouse=True)
+def _static_shell_judgment(monkeypatch: pytest.MonkeyPatch) -> None:
+    # [F7] 이 파일은 샌드박스를 못 쓸 때의 정적 판정을 본다 (test_sandbox.py가 샌드박스)
+    monkeypatch.setenv(PLAN_SANDBOX, "0")
 
 
 # 메시지 객체를 테스트끼리 나눠 쓰지 않는다. 그래프가 id를 객체에 직접 적는다

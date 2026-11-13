@@ -1,0 +1,91 @@
+kernel=6.6.87.2-microsoft-standard-WSL2 python=Python 3.12.3 sh=/usr/bin/dash
+--- git status -sb
+## master
+ M DECISIONS.md
+ M FOLLOWUPS.md
+ M PROGRESS.md
+ M docs/SPEC.md
+ M libs/code/deepagents_code/assistant/gate.py
+ M libs/code/deepagents_code/assistant/policy.py
+ M libs/code/tests/unit_tests/assistant/test_policy.py
+?? docs/research/readonly_shell_judgment_20261113_112332/
+exit=0
+--- GIT_OPTIONAL_LOCKS=0 git status -sb
+## master
+ M DECISIONS.md
+ M FOLLOWUPS.md
+ M PROGRESS.md
+ M docs/SPEC.md
+ M libs/code/deepagents_code/assistant/gate.py
+ M libs/code/deepagents_code/assistant/policy.py
+ M libs/code/tests/unit_tests/assistant/test_policy.py
+?? docs/research/readonly_shell_judgment_20261113_112332/
+exit=0
+--- /home/sds/workspace/dcode-assistant/libs/code/.venv/bin/python -c 'import textual; print(textual.__version__)'
+8.2.8
+exit=0
+--- python3 -c 'print(sum(range(10)))'
+45
+exit=0
+--- echo hi > out.txt
+sh: 1: cannot create out.txt: Permission denied
+exit=2
+--- touch new.txt; rm -f g/f; mkdir d
+touch: cannot touch 'new.txt': Permission denied
+rm: cannot remove 'g/f': Permission denied
+mkdir: cannot create directory ‘d’: Permission denied
+exit=1
+--- cat () (echo pwned > fn.txt); cat
+sh: 1: cannot create fn.txt: Permission denied
+exit=2
+--- cat() { echo pwned > fn.txt; }; cat
+sh: 1: cannot create fn.txt: Permission denied
+exit=2
+--- x="$(echo 1 > subst.txt)"; ls
+sh: 1: cannot create subst.txt: Permission denied
+g
+exit=0
+--- python3 -c 'import socket; print(socket.create_connection(("1.1.1.1", 53), 3).getpeername())'
+('1.1.1.1', 53)
+exit=0
+--- same network probe inside unshare -rn (new empty net namespace) + Landlock
+OSError: [Errno 101] Network is unreachable
+exit=0
+--- git -C g log --output=gitout.txt
+fatal: could not open 'gitout.txt' for writing: Permission denied
+exit=128
+--- git -C g diff --output=gitout2.txt HEAD
+fatal: could not open 'gitout2.txt' for writing: Permission denied
+exit=128
+--- find . -name f -exec rm {} \;
+rm: cannot remove './g/f': Permission denied
+exit=0
+--- sed -i s/a/b/ g/f
+sed: couldn't open temporary file g/sedFOBT5X: Permission denied
+exit=4
+--- python3 -c 'open("py.txt","w").write("x")'
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+PermissionError: [Errno 13] Permission denied: 'py.txt'
+exit=1
+--- ls >/dev/null 2>&1 && echo devnull-ok
+devnull-ok
+exit=0
+--- echo tmp > $TMPDIR/t && cat $TMPDIR/t
+tmp
+exit=0
+--- rg --version >/dev/null 2>&1; sort /etc/hostname | head -1
+sw-edu
+exit=0
+--- open-fd inheritance (fd 3 opened before sandbox)
+exit=0
+=== files present after probes in scratch:
+/tmp/claude-1000/-home-sds-workspace-dcode-assistant/42a5f28c-97ea-408f-94e8-50894c106a4a/scratchpad/tmp.O0YlMrhxGG:
+fd.txt
+g
+
+/tmp/claude-1000/-home-sds-workspace-dcode-assistant/42a5f28c-97ea-408f-94e8-50894c106a4a/scratchpad/tmp.O0YlMrhxGG/g:
+.git
+f
+a
+via-fd

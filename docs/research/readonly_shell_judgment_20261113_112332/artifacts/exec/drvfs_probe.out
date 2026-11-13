@@ -1,0 +1,5 @@
+--- drvfs (/mnt/c) write under Landlock
+touch: cannot touch '/mnt/c/Users/Public/ll_probe_1506258/x': Permission denied
+sh: 1: cannot create /dev/shm/ll_probe_1506258: Permission denied
+exit=2
+ls: cannot access '/dev/shm/ll_probe_1506258': No such file or directory

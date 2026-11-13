@@ -97,6 +97,10 @@ _ALLOWLIST: dict[CallSite, str] = {
         "client/non_interactive.py", "_run_agent_loop", "Path.cwd", "8826e907"
     ): "The headless client records its local working directory.",
     CallSite(
+        "assistant/sandbox.py", "main", "os.getcwd", "f1871d90"
+    ): "The sandbox launcher runs as its own process that `execute` started in "
+    "the workspace directory; it re-enters that directory after mounting.",
+    CallSite(
         "client/non_interactive.py", "_run_agent_loop", "Path.cwd", "8826e907", 2
     ): "The headless client evaluates local hook trust.",
     CallSite(

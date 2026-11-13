@@ -7,6 +7,7 @@ import dataclasses
 import threading
 from typing import TYPE_CHECKING, Annotated, Any, NotRequired
 
+from deepagents.backends import LocalShellBackend
 from deepagents.middleware._utils import (  # noqa: PLC2701  # SPEC 3.7이 지정한 도우미
     append_to_system_message,
 )
@@ -20,7 +21,7 @@ from langchain.agents.middleware.types import (
 from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.types import Command
 
-from deepagents_code.assistant import prompts, tracing
+from deepagents_code.assistant import prompts, sandbox, tracing
 from deepagents_code.assistant.decider import question_j4, question_j5
 from deepagents_code.assistant.options import (
     APPROVE_WORDS,
@@ -79,10 +80,13 @@ REQUEST_TEXT_MAX = 4000
 _DENY_TEXT = {
     # [F1] 다음 행동을 알려 줘서 셸 명령만 바꿔 가며 다시 시도하지 않게 한다
     # [F6] git 하위 명령은 판정 표에서 만든다. branch는 목록만 받는다
-    "no_approved_plan": "승인된 계획이 없다. 승인 전 execute는 읽기 전용 명령"
+    # [F7] execute가 이 문장을 받는 것은 샌드박스를 못 쓸 때뿐이다
+    "no_approved_plan": "승인된 계획이 없다. 승인 전 execute는 읽기 전용 "
+    "샌드박스에서 돈다(쓰기는 Read-only file system으로 실패하고 네트워크는 없다). "
+    "샌드박스를 못 쓰는 환경에서는 읽기 전용 명령"
     f"(ls, cat, head, grep, echo, 정해진 옵션의 git {', '.join(GIT_READ_SUBCOMMANDS)}."
-    " branch는 목록만)과 그 조합만 통과한다. 프로그램 실행과 "
-    "쓰기는 통과하지 않으니 셸 명령을 바꿔 다시 시도하지 마라. 읽기는 read_file, "
+    " branch는 목록만)과 그 조합만 통과하고 프로그램 실행과 쓰기는 통과하지 않으니 "
+    "셸 명령을 바꿔 다시 시도하지 마라. 읽기는 read_file, "
     'glob, grep이나 task(subagent_type="explorer")로 하라. 코드를 바꾸려면 먼저 '
     "탐색하고 submit_plan으로 계획을 내서 승인을 받아라.",
     "protected_path": ".deepagents/ 아래 계획, Memory, 개선안 폴더는 "
@@ -210,6 +214,20 @@ def _with_updates(
     return dataclasses.replace(result, update={**update, **updates})
 
 
+def _sandboxed(request: ToolCallRequest) -> ToolCallRequest:
+    # [F7] 실행할 명령만 런처로 감싼다. 모델과 승인 화면은 원래 명령을 본다
+    args = request.tool_call.get("args") or {}
+    command = sandbox.wrap_command(args["command"])
+    return request.override(
+        tool_call={**request.tool_call, "args": {**args, "command": command}}
+    )
+
+
+def _sandboxable(args: Mapping[str, Any]) -> bool:
+    command = args.get("command")
+    return isinstance(command, str) and bool(command.strip()) and sandbox.available()
+
+
 def _deny(request: ToolCallRequest, reason: str) -> ToolMessage:
     return ToolMessage(
         content=_DENY_TEXT.get(reason, reason),
@@ -237,6 +255,9 @@ class PlanGateMiddleware(AgentMiddleware):
         self._store = PlanStore(options.project_root)
         self._targets_lock = threading.Lock()
         self.tools = build_plan_tools(options, backend)
+        # [F7] 원격 샌드박스 백엔드에서는 명령이 이 머신에서 돌지 않는다
+        default = getattr(backend, "default", backend)
+        self._local_shell = isinstance(default, LocalShellBackend)
 
     @property
     def name(self) -> str:
@@ -391,7 +412,7 @@ class PlanGateMiddleware(AgentMiddleware):
     # ----- 도구 호출 -----
 
     def _decide(self, request: ToolCallRequest) -> tuple[str, str, str | None]:
-        # (결정, 사유, J4가 통과시킨 새 대상). 결정은 allow, deny, explore
+        # (결정, 사유, J4가 통과시킨 새 대상). 결정은 allow, deny, explore, sandbox
         state = request.state
         name = request.tool_call["name"]
         args = request.tool_call.get("args") or {}
@@ -415,6 +436,16 @@ class PlanGateMiddleware(AgentMiddleware):
             mcp_mutating=self._options.mcp_mutating_tool_names,
             fresh_approval=fresh,
         )
+        if (
+            name in SHELL_TOOLS
+            and phase != "executing"
+            and reason in {"read_only_shell", "no_approved_plan"}
+            and self._local_shell
+            and _sandboxable(args)
+        ):
+            # [F7] 승인 전 execute는 정적 판정 대신 읽기 전용 샌드박스에서 돈다.
+            # 보호 폴더를 언급한 쓰기 명령(protected_path)은 전처럼 거부한다
+            return "sandbox", "sandbox", None
         if decision != "needs_scope_check":
             return decision, reason, None
         if plan is None:
@@ -521,7 +552,7 @@ class PlanGateMiddleware(AgentMiddleware):
             return self._counted(request, _deny(request, reason), reason)
         if decision == "explore":
             return self._counted(request, self._explored(request, handler(request)))
-        result = handler(request)
+        result = handler(_sandboxed(request) if decision == "sandbox" else request)
         self._extend_targets(request.state.get(PLAN_ID_KEY), target, result)
         return self._counted(request, result)
 
@@ -539,7 +570,8 @@ class PlanGateMiddleware(AgentMiddleware):
         if decision == "deny":
             denied = _deny(request, reason)
             return await asyncio.to_thread(self._counted, request, denied, reason)
-        result = await handler(request)
+        run = _sandboxed(request) if decision == "sandbox" else request
+        result = await handler(run)
         if decision == "explore":
             result = await asyncio.to_thread(self._explored, request, result)
         else:
@@ -602,16 +634,21 @@ class SubagentWriteBlockMiddleware(AgentMiddleware):
         self,
         project_root: Path,
         read_only_tool_names: frozenset[str] = frozenset(),
+        *,
+        shell_sandbox: bool = False,
     ) -> None:
         """차단기를 만든다.
 
         Args:
             project_root: 프로젝트 루트. 읽기 전용 셸 판정에 쓴다.
             read_only_tool_names: 더 허용할 읽기 전용 도구 이름 (MCP).
+            shell_sandbox: `execute`가 이 머신의 셸에서 도는가. 그러면 [F7]
+                샌드박스를 쓸 수 있을 때 정적 판정 대신 샌드박스에서 돌린다.
         """
         super().__init__()
         self._project_root = project_root
         self._allowed = SUBAGENT_ALLOWED_TOOLS | read_only_tool_names
+        self._shell_sandbox = shell_sandbox
 
     @property
     def name(self) -> str:
@@ -622,12 +659,17 @@ class SubagentWriteBlockMiddleware(AgentMiddleware):
         tools = [t for t in request.tools if tool_name_of(t) in self._allowed]
         return request.override(tools=tools)
 
-    def _denied(self, request: ToolCallRequest) -> bool:
+    def _route(self, request: ToolCallRequest) -> ToolCallRequest | None:
+        # 실행할 요청. 거부면 None
         name = request.tool_call["name"]
         if name in SHELL_TOOLS:
             args = request.tool_call.get("args") or {}
-            return not is_read_only_shell(args.get("command"), self._project_root)
-        return name not in self._allowed
+            if self._shell_sandbox and _sandboxable(args):
+                return _sandboxed(request)
+            if is_read_only_shell(args.get("command"), self._project_root):
+                return request
+            return None
+        return request if name in self._allowed else None
 
     def wrap_model_call(
         self,
@@ -663,9 +705,10 @@ class SubagentWriteBlockMiddleware(AgentMiddleware):
         Returns:
             도구 결과 또는 거부 메시지.
         """
-        if self._denied(request):
+        run = self._route(request)
+        if run is None:
             return _deny(request, "subagent_read_only")
-        return handler(request)
+        return handler(run)
 
     async def awrap_tool_call(
         self,
@@ -677,6 +720,7 @@ class SubagentWriteBlockMiddleware(AgentMiddleware):
         Returns:
             도구 결과 또는 거부 메시지.
         """
-        if await asyncio.to_thread(self._denied, request):
+        run = await asyncio.to_thread(self._route, request)
+        if run is None:
             return _deny(request, "subagent_read_only")
-        return await handler(request)
+        return await handler(run)
