@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -22,6 +23,7 @@ from deepagents_code.assistant.options import (
 from deepagents_code.auto_mode import _fixed_repo_command_allowed
 from deepagents_code.config import (
     RECOMMENDED_SAFE_SHELL_COMMANDS,
+    contains_dangerous_patterns,
     is_shell_command_allowed,
 )
 
@@ -33,6 +35,17 @@ if TYPE_CHECKING:
 Decision = Literal["allow", "deny", "needs_scope_check"]
 
 _SUMMARY_MAX = 200
+# [F1] 업스트림 목록에 echo만 더한다. 리다이렉트는 따로 거부되므로 출력만 한다
+_READ_ONLY_COMMANDS = [*RECOMMENDED_SAFE_SHELL_COMMANDS, "echo"]
+# [F1] 쓰기가 없는 리다이렉트 두 가지. 공백으로 떨어진 토큰일 때만 지운다
+# bash는 공백, 탭, 줄바꿈으로만 나눈다. \s의 유니코드 공백으로 경계를 잡으면 안 된다
+_HARMLESS_REDIRECT_RE = re.compile(r"(?<![^ ])2>(?:&1|/dev/null)(?![^ ])")
+# 업스트림 is_shell_command_allowed와 같은 분할
+_SHELL_SPLIT_RE = re.compile(r"&&|\|\||[|;]")
+# `cat () ( touch x ) && cat`처럼 허용 이름으로 함수를 정의하면 첫 토큰 검사를 지난다
+_FUNC_DEF_RE = re.compile(r"\(\s*\)")
+# glob이 `--output=x` 같은 파일 이름을 git 옵션으로 펼칠 수 있다
+_GLOB_CHARS = frozenset("*?[")
 _PROTECTED_NAMES = "|".join(re.escape(d.split("/", 1)[1]) for d in PROTECTED_DIRS)
 # 보호 폴더 자체, 또는 그 상위인 .deepagents 전체(뒤에 구분자·끝·glob)를 잡는다.
 _PROTECTED_MENTION_RE = re.compile(
@@ -119,11 +132,68 @@ def is_read_only_shell(command: object, project_root: Path) -> bool:
     Returns:
         읽기 전용으로 확인되면 True.
     """
-    if not isinstance(command, str) or not command.strip():
+    if (
+        not isinstance(command, str)
+        or not command.strip()
+        or _FUNC_DEF_RE.search(command)
+    ):
         return False
     if is_shell_command_allowed(command, list(RECOMMENDED_SAFE_SHELL_COMMANDS)):
         return True
-    return _fixed_repo_command_allowed(command, project_root)
+    if _git_read_only(command, project_root):
+        return True
+    return _read_only_chain(command, project_root)
+
+
+def _git_read_only(command: str, project_root: Path) -> bool:
+    return _GLOB_CHARS.isdisjoint(command) and _fixed_repo_command_allowed(
+        command, project_root
+    )
+
+
+def _read_only_chain(command: str, project_root: Path) -> bool:
+    """[F1] 조합 명령의 모든 조각이 읽기 전용인가.
+
+    `2>&1`, `2>/dev/null`만 지우고 나머지는 업스트림 검사에 맡긴다. 맨 앞의
+    `cd <절대 경로>`는 받지만, 그 뒤의 git은 `cd`가 프로젝트 루트일 때만 받는다.
+    다른 저장소(하위 폴더의 중첩 저장소 포함)의 설정이 git 명령에서 프로그램을
+    돌릴 수 있어서다.
+
+    Returns:
+        모든 조각이 읽기 전용으로 확인되면 True.
+    """
+    stripped = _HARMLESS_REDIRECT_RE.sub(" ", command)
+    if contains_dangerous_patterns(stripped):
+        return False
+    segments = [s.strip() for s in _SHELL_SPLIT_RE.split(stripped)]
+    if any(not s for s in segments):
+        return False
+    git_ok = True
+    cd_target = _cd_target(segments[0])
+    if cd_target is not None:
+        segments = segments[1:]
+        git_ok = cd_target == project_root.resolve()
+    return bool(segments) and all(
+        is_shell_command_allowed(s, _READ_ONLY_COMMANDS)
+        or (git_ok and _git_read_only(s, project_root))
+        for s in segments
+    )
+
+
+def _cd_target(segment: str) -> Path | None:
+    try:
+        parts = shlex.split(segment)
+    except ValueError:
+        return None
+    # 절대 경로만 받는다. 상대 경로는 CDPATH, `-`는 OLDPWD, `~`는 홈으로 간다
+    if (
+        len(parts) != 2  # noqa: PLR2004  # cd와 경로 하나
+        or parts[0] != "cd"
+        or not parts[1].startswith("/")
+        or any(c in parts[1] for c in "*?[")
+    ):
+        return None
+    return normalize_tool_path(parts[1])
 
 
 def mentions_protected(command: str) -> bool:

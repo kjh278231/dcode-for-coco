@@ -203,6 +203,30 @@ async def test_g3_read_only_shell_without_plan_runs(tmp_path: Path) -> None:
     assert "marker.txt" in str(message.content)
 
 
+async def test_f1_observed_read_only_shell_runs_and_program_is_guided(
+    tmp_path: Path,
+) -> None:
+    """[F1] 거부되던 읽기 명령은 실행되고, 프로그램 실행은 안내와 함께 거부된다."""
+    (tmp_path / "coco.sh").write_text("echo ran > ran.txt\n")
+    commands = {
+        "e1": "echo probe",
+        "e2": f'ls {tmp_path} && echo "---coco.sh---" && head -60 {tmp_path}/coco.sh',
+        "e3": f"cd {tmp_path} && git log --oneline -3 2>&1 | head -5",
+        "e4": f"cd {tmp_path} && bash coco.sh 2>&1 | head -30",
+    }
+    script = [tool_call("execute", {"command": c}, i) for i, c in commands.items()]
+    h = Harness(tmp_path, [*script, done()])
+    result = await h.say("coco 배너 미리 보기")
+    assert "probe" in str(tool_result(result, "e1").content)
+    assert "echo ran" in str(tool_result(result, "e2").content)
+    assert "승인된 계획이 없다" not in str(tool_result(result, "e3").content)
+    denied = tool_result(result, "e4")
+    assert denied.status == "error"
+    assert "read_file" in str(denied.content)
+    assert 'subagent_type="explorer"' in str(denied.content)
+    assert not (tmp_path / "ran.txt").exists()
+
+
 async def test_g4_submit_without_exploring_is_denied(tmp_path: Path) -> None:
     h = Harness(tmp_path, [submit(), done()])
     result = await h.say("app.py 버그 고쳐줘")

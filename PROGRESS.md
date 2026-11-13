@@ -288,6 +288,29 @@
 - 확인 못 한 것: `run --improvement`의 실제 모델 실행(candidate 경로는 가짜 dcode로만). 반복 3회의 잡음 폭과 C 판정을 실제 신호로 본 적 없다. 함정 과제가 T8에 쓸 만큼 신호를 만드는지: 이번에는 `test_failures` 1로 7.2 임계값(per_run 2)에 못 미쳤다. 에이전트가 함정을 탐색에서 알아챘다. M9에서 T8 재현이 안 되면 함정을 더 숨기거나 임계값을 다시 봐야 한다(과제를 바꾸면 기록한다). Jev 호출 수 어림(실행당 5회)은 근거 없음. 평가 실행의 trace에도 `dcode-assistant` 태그가 붙고 `/improve`는 프로젝트 구분 없이 최근 20건을 읽는다. `--improvement` 한 번(18 실행, 호출 40회 이상)이 그 창을 채우므로 M9 T8에서 함정 과제 두 번 → `/improve` 순서가 평가 실행 뒤로 밀리지 않게 해야 한다. `ty` 안 돌림.
 - 참고: 작업 중 `scripts/smoke_dcode.sh`(`DCODE` 덮어쓰기)와 `scripts/release.sh`가 다른 쪽에서 바뀌거나 생겼다. 이 마일스톤에서 만든 변경이 아니어서 손대지 않았다.
 
+## F1–F3. dcode-a 사용 중 나온 문제 — 완료 (2026-11-13)
+
+`dcode-a`(M7 `4235bca` 릴리스본)를 `~/workspace/deepagents-coco`에서 coco 배너 요청에 쓰다가 나온 문제(`FOLLOWUPS.md`). 원문 명령은 `~/.deepagents/.state/sessions.db` 체크포인트에서 꺼냈다(FOLLOWUPS의 `ls <경로> && head -60 <파일>`은 줄인 것이고 실제로는 가운데 `echo "---coco.sh---"`가 있었다. `ls && head`만이면 전부터 통과한다).
+
+- 수정(assistant): `policy.py`(`is_read_only_shell` 끝에 `_read_only_chain`, `_cd_target`, `_READ_ONLY_COMMANDS`, `_HARMLESS_REDIRECT_RE`, `_SHELL_SPLIT_RE`), `gate.py`(`_DENY_TEXT["no_approved_plan"]` 안내 문장), 테스트 `test_policy.py`(`test_f1_read_only_chains_allowed` 7, `test_f1_write_capable_lookalikes_denied` 44), `test_gate.py`(`test_f1_observed_read_only_shell_runs_and_program_is_guided`, 가짜 모델 그래프). 업스트림 파일은 고치지 않았다(그래서 baseline은 돌리지 않았다).
+- F1 판정: 넓혔다(O17). 조합 명령을 `&&`, `||`, `|`, `;`로 나눠 조각마다 업스트림 `is_shell_command_allowed`(허용 목록 + `echo`) 또는 `_fixed_repo_command_allowed`를 요구한다. 그 전에 스페이스로 떨어진 `2>&1`, `2>/dev/null` 토큰만 지우고(유니코드 공백은 bash가 나누지 않아 경계로 안 봄) 나머지는 업스트림 `contains_dangerous_patterns`가 거부한다(다른 `>`, `<`, 단독 `&`, `$`, 치환). 맨 앞의 `cd <절대 경로>`는 건너뛰되, 그 뒤의 git은 `cd` 대상이 프로젝트 루트 자체일 때만 받는다(하위 폴더의 중첩 저장소 설정이 git에서 프로그램을 돌릴 수 있다). 관찰한 네 읽기 명령은 통과, 같은 실행의 `cd mascot && python3 coco.sh …`는 계속 거부된다.
+- F1 반복 거부: `repeat_failures`는 `summarize_call`(명령 포함) 서명이 같을 때만 올라 셸 변형 반복은 못 잡는다. `gate_denies`가 세고 SPEC 7.2 임계값(작업당 3, 작업 2개)이 자기 개선에서 잡는다. 실행 중 단계 올림은 SPEC에 없어 넣지 않았다. 대신 거부 문장에 "셸 명령을 바꿔 다시 시도하지 마라"와 읽기 도구, 탐색 서브에이전트를 넣었다.
+- F2 원인: 거부 문구는 auto 분류기의 로컬 마감(`_ClassifierDeadlineExceededError`). 20초는 기본값 `AUTO_CLASSIFIER_TIMEOUT_SECONDS_DEFAULT`(설정 안 함), 분류기 모델은 주 모델 물려받기, 재시도 대기도 같은 20초 안. 순서: `AutoModeHITLMiddleware`가 주 모델 응답을 감싸는 `awrap_model_call`에서 먼저 분류하고, 게이트는 도구 실행 때 판단한다. 그래서 게이트가 거부할 호출도 분류기를 거친다. 시간 초과가 난 호출이 바로 게이트도 거부할 `python3` 호출이었다. 나머지 네 `execute`는 분류기가 허용한 뒤 게이트가 거부했다. 재현: 체크포인트에 남은 분류기 요청 다섯 개(성공한 것. 시간 초과 난 요청은 판정 뒤에만 상태에 저장돼 남지 않는다)를 같은 모델(`opengateway:z-ai/glm-5.3-flash-ultrafast`)로 세 번씩 0.7~4.9초, 짧은 요청 13번 1.4~6.3초. 시간 초과 난 `python3` 호출을 직전 분류기 기록과 앞선 호출 10개로 재구성한 요청은 여섯 번 3.5~7.9초(모두 거부 판정, 다른 요청보다 느림). 20초 초과는 재현 못 했다. 재구성이고 새로 만든 모델 객체라 실행 당시와 같지 않을 수 있다.
+- F2 처리: 코드 변경 없음(O18). SPEC 14장에 순서와 설정(`DEEPAGENTS_CODE_AUTO_CLASSIFIER_TIMEOUT`, `[models].auto_classifier_timeout` 1~300초, `[models].auto_classifier`, `--auto-classifier-model`. 프로젝트 `.env`로는 못 정함)을 적었다. 게이트가 확실히 거부할 호출에서 분류기를 건너뛰는 업스트림 수정은 FOLLOWUPS에 남겼다.
+- F3: 오케스트레이터가 처리했다. `scripts/release.sh`가 `~/.local/bin/dcode-a`를 링크 대신 `DEEPAGENTS_CODE_AUTO_UPDATE=0 exec <venv>/bin/dcode "$@"` 감싸기 스크립트로 쓴다(전의 링크를 먼저 지워 venv의 `dcode`를 덮어쓰지 않는다). 지금 설치(`4235bca`)에 적용했고 `is_auto_update_enabled()`가 그 환경에서 False, 없으면 True인 것을 확인했다. 이 작업에서는 `release.sh`와 `~/.local/bin`을 건드리지 않았다.
+- 검사:
+  - `check.sh unit` 309 passed(M8 257 + 새 52: 위 F1 테스트).
+  - `check.sh lint` 통과.
+  - 변이 7개 모두 테스트가 실패했다: 조각 검사 `all`→`any`(15건), 리다이렉트 경계 조건 제거(5건), 경계를 `\S`(유니코드 공백)로(3건), `cd` 뒤 git을 루트가 아니어도 허용(3건), `cd` 절대 경로 조건 제거(1건. 상대 경로 `tmp/…/root`는 `validate_path`가 `/`를 붙여 루트로 보이지만 bash에서는 하위 폴더다), `echo` 빼기(3건), 거부 문장에서 `read_file` 빼기(1건). 모두 되돌린 것을 diff로 확인했다.
+- 명세와 다르게 한 점 (SPEC 3.4, 3.7, 14장에 `[F1]`, `[F2]`로 반영함): `is_read_only_shell` 4단계 추가. `no_approved_plan` 문장. 반복 거부와 auto 모드 순서, 분류기 설정은 14장.
+- 리뷰 뒤 수정 (적대적 검토, 후보 약 60개를 `is_read_only_shell`과 이전 판정에 직접 넣어 봄):
+  - 우회 1 (전부터 있던 것, `echo`로 넓어짐): 허용 이름으로 함수를 정의하면 첫 토큰 검사를 지난다. `cat () ( touch x ) && cat`, `ls () ( touch x ); ls`는 업스트림 `is_shell_command_allowed`만으로 True였고 dash(`/bin/sh`, 백엔드가 `shell=True`)에서 본문이 실행돼 파일이 생겼다. `echo () ( … ); echo`는 이번 변경으로 새로 통과했다. 수정: `policy._FUNC_DEF_RE`(`\(\s*\)`)가 있으면 맨 앞에서 거부.
+  - 우회 2 (전부터 있던 것, 조합으로 넓어짐): `git diff *`는 glob이 `--output=pwned`라는 파일 이름을 옵션으로 펼쳐 파일을 쓴다(임시 저장소에서 확인). 업스트림 `_fixed_repo_command_allowed`가 True였고 `ls && git diff *`는 이번 변경으로 새로 통과했다. 수정: `policy._git_read_only`(glob 문자 `*?[`가 없을 때만 git 판정), 단독 명령과 조각 양쪽에 쓴다.
+  - 막힌 것으로 확인(이전과 같음): `2>/dev/null>x`, `2>&1>x`, `2>/dev/nullx`, `1>&2`, `3>&1`, `>|`, `&>`, `2>&1&`, `|&`, 따옴표 안의 구분자, `\;`, 제어 문자(`\v`, `\f`, NUL), NBSP 경계, `$HOME`, `(rm x)`, `{ rm x; }`, `git -c`, `git -C`, `git log --output`, `--ext-diff`, `cd /tmp && git`, `cd 루트/.. && git`(`validate_path`가 `..`을 거부해 bash 논리 경로와 어긋날 일이 없다), `GIT_DIR=… git`. 통과하지만 무해: `ls ;; ls`, `ls (rm x)`(dash 문법 오류), `echo !!`(비대화형은 history 없음), `echo {a,b}`(dash는 중괄호 확장 없음).
+  - 테스트: `test_f1_write_capable_lookalikes_denied`에 7개 추가(함수 정의 3, glob git 4). `check.sh unit` 316 passed(309 + 7), `check.sh lint` 통과.
+  - 문서: SPEC 3.4 의사 코드 1), 3)과 검사 문단, DECISIONS O17, FOLLOWUPS(업스트림에 남은 같은 우회, `hostname <이름>`).
+- 확인 못 한 것: 실제 모델이 새 거부 문장을 받고 읽기 도구로 옮겨 가는지(가짜 모델로만). 서브에이전트의 넓어진 `execute`를 실제로 돌려 보지 않았다(같은 함수라 단위 테스트로 갈음). F2의 20초 초과 원인(일시적 지연으로 추정). auto 모드에서 분류기가 시간 초과로 거부한 호출은 게이트의 안내 문장을 받지 못한다. `ty` 안 돌림.
+
 ## M9. 보정과 README — 다음
 
-먼저 볼 것: `FOLLOWUPS.md`(F1 계획 전 읽기 전용 셸 거부, F2 auto 모드 분류기 시간 초과, F3 릴리스본 자동 업데이트). M8의 함정 과제가 T8용 신호를 만들지 못한 문제도 M8 절에 있다.
+먼저 볼 것: `FOLLOWUPS.md`(F2의 남은 일: auto 분류기를 건너뛰는 업스트림 수정 검토. F4: 업스트림 읽기 전용 판정에 남은 우회). M8의 함정 과제가 T8용 신호를 만들지 못한 문제도 M8 절에 있다.

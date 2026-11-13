@@ -76,8 +76,12 @@ if TYPE_CHECKING:
 REQUEST_TEXT_MAX = 4000
 
 _DENY_TEXT = {
-    "no_approved_plan": "승인된 계획이 없다. 코드를 바꾸려면 먼저 탐색하고 "
-    "submit_plan으로 계획을 내서 승인을 받아라.",
+    # [F1] 다음 행동을 알려 줘서 셸 명령만 바꿔 가며 다시 시도하지 않게 한다
+    "no_approved_plan": "승인된 계획이 없다. 승인 전 execute는 읽기 전용 명령"
+    "(ls, cat, head, grep, echo, 읽기 git과 그 조합)만 통과한다. 프로그램 실행과 "
+    "쓰기는 통과하지 않으니 셸 명령을 바꿔 다시 시도하지 마라. 읽기는 read_file, "
+    'glob, grep이나 task(subagent_type="explorer")로 하라. 코드를 바꾸려면 먼저 '
+    "탐색하고 submit_plan으로 계획을 내서 승인을 받아라.",
     "protected_path": ".deepagents/ 아래 계획, Memory, 개선안 폴더는 "
     "직접 고칠 수 없다.",
     "bad_path": "경로를 해석할 수 없다.",
