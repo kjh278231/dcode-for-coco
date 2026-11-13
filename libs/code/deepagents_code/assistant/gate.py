@@ -220,6 +220,15 @@ def _append_text(
     return dataclasses.replace(result, update=update)
 
 
+def _with_sandbox_note(result: Any, reason: str) -> Any:  # noqa: ANN401
+    # 성공한 명령에는 안 붙인다. 쓰기 실패를 설명하려는 문구라 성공엔 컨텍스트만 늘린다
+    note = _SANDBOX_NOTE.get(reason)
+    message = _message_of(result)
+    if note is None or (message and "[Command succeeded" in _text_of(message)):
+        return result
+    return _append_text(result, note)
+
+
 def _with_updates(
     result: ToolMessage | Command[Any], updates: dict[str, Any]
 ) -> ToolMessage | Command[Any]:
@@ -580,8 +589,7 @@ class PlanGateMiddleware(AgentMiddleware):
         if decision == "explore":
             return self._counted(request, self._explored(request, handler(request)))
         result = handler(_sandboxed(request) if decision == "sandbox" else request)
-        if reason in _SANDBOX_NOTE:
-            result = _append_text(result, _SANDBOX_NOTE[reason])
+        result = _with_sandbox_note(result, reason)
         self._extend_targets(request.state.get(PLAN_ID_KEY), target, result)
         return self._counted(request, result)
 
@@ -601,8 +609,7 @@ class PlanGateMiddleware(AgentMiddleware):
             return await asyncio.to_thread(self._counted, request, denied, reason)
         run = _sandboxed(request) if decision == "sandbox" else request
         result = await handler(run)
-        if reason in _SANDBOX_NOTE:
-            result = _append_text(result, _SANDBOX_NOTE[reason])
+        result = _with_sandbox_note(result, reason)
         if decision == "explore":
             result = await asyncio.to_thread(self._explored, request, result)
         else:

@@ -889,7 +889,7 @@ class PlanGateMiddleware(AgentMiddleware):
     위 조건(LocalShellBackend, 빈 명령 아님, available())이면 거부 대신 sandbox. 사유 sandbox_protected.
     J4로 보내지 않는다(통과하면 샌드박스 밖에서 보호 폴더에 쓸 수 있다). 못 쓰면 전처럼 거부
 5'') [F9] 사유가 sandbox_scope나 sandbox_protected면 결과 본문 끝에 "[게이트] ... 읽기 전용 샌드박스에서
-    돌렸다" 한 줄을 붙인다. 모델이 쓰기 실패(EROFS)의 이유를 알게 한다. 계획 전 보통 명령(사유 sandbox)에는 붙이지 않는다
+    돌렸다" 한 줄을 붙인다. 모델이 쓰기 실패(EROFS)의 이유를 알게 한다. 결과에 `[Command succeeded`가 있으면(성공) 붙이지 않는다(컨텍스트만 늘린다). 계획 전 보통 명령(사유 sandbox)에는 붙이지 않는다
 ```
 
 [F9] 안전 논리: 샌드박스로 보내는 것은 전에 거부되던 호출뿐이다(J4 실패, 보호 폴더 언급). 샌드박스는 쓰기가 버리는 tmpfs 밖에서 모두 실패하고 네트워크가 없으니 거부보다 쓰기 능력이 늘지 않는다. 읽기 능력은 계획 전 샌드박스와 같다. J4가 통과시킨 execute와 계획 대상 쓰기 도구는 전처럼 샌드박스 밖이다. 쓰기 경로 도구(write_file, edit_file 등)의 J4 실패와 보호 경로는 전처럼 거부다. 보호 폴더 읽기는 원래 막을 뜻이 아니었다(탐색 에이전트는 `.deepagents/memory/`를 읽고, `ls`·`read_file` 도구로도 읽힌다. 거부 문장도 "고칠 수 없다"). 실사용에서 `git diff HEAD --stat | head -5; ls .deepagents/plans/ 2>/dev/null | head`가 거부됐고, 승인 뒤 계획 대상 밖의 읽기 전용 python 탐침이 J4에서 세 번 거부됐는데 같은 탐침은 통과하기도 했다.

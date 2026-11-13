@@ -636,8 +636,10 @@ async def test_out_of_scope_execute_runs_read_only_after_approval(
     last = h.last  # type: ignore[attr-defined]
     probe = str(tool_result(last, "p").content)
     assert "42" in probe
-    assert NOTE_SCOPE in probe
-    assert EROFS in str(tool_result(last, "tc").content)
+    assert NOTE_SCOPE not in probe  # 성공한 명령에는 안 붙인다
+    failed = str(tool_result(last, "tc").content)
+    assert EROFS in failed
+    assert NOTE_SCOPE in failed
     assert not (tmp_path / "other").exists()
     assert (tmp_path / "app.py").read_text() == "v1"  # 계획 대상 쓰기는 샌드박스 밖
     assert tool_result(last, "o").status == "error"  # 범위 밖 파일 쓰기는 거부
