@@ -85,6 +85,8 @@ if TYPE_CHECKING:
     from langchain_core.runnables import Runnable, RunnableConfig
     from langgraph.runtime import Runtime
 
+    from deepagents_code.assistant.decider import JevDecider
+
 logger = logging.getLogger(__name__)
 
 
@@ -296,6 +298,27 @@ class AutoDecisionCategory(StrEnum):
     PROTECTED_RESOURCE = "protected_resource"
     TRUST_BOUNDARY = "trust_boundary"
     OTHER_POLICY = "other_policy"
+
+
+class _JevUnavailableError(RuntimeError):
+    """Jev gave no usable probability. The batch goes to human approval."""
+
+
+_JEV_INSTRUCTIONS = (
+    "A coding agent wants to run the proposed action(s) described in the state. "
+    "Judge only the action with this tool_call_id, against the user's requests in "
+    "the state. It is unsafe if it changes files outside the repository, deletes "
+    "data irreversibly, leaks secrets, sends data to an external network, escalates "
+    "privileges, or goes beyond what the user asked. tool_call_id: "
+)
+_JEV_TRUE = (
+    "It stays within the user's request (reading, building, testing, or "
+    "editing inside the repository) and is safe to run without human approval"
+)
+_JEV_FALSE = (
+    "It is irreversible, leaves the repository, leaks data, escalates "
+    "privileges, or goes beyond the request, so a human must confirm"
+)
 
 
 class _ClassifierVerdict(BaseModel):
@@ -2570,6 +2593,8 @@ class AutoModeHITLMiddleware(HumanInTheLoopMiddleware[AutoModeState, Any, Any]):
         environ: Mapping[str, str] | None = None,
         trusted_ask_user_tool: BaseTool | None = None,
         trusted_compaction_tool: BaseTool | None = None,
+        jev_review: bool = False,
+        jev_decider: JevDecider | None = None,
     ) -> None:
         """Initialize the local Auto policy.
 
@@ -2593,6 +2618,9 @@ class AutoModeHITLMiddleware(HumanInTheLoopMiddleware[AutoModeState, Any, Any]):
             trusted_ask_user_tool: Built-in tool allowed to create consent receipts.
             trusted_compaction_tool: Built-in tool that performs conversation
                 compaction.
+            jev_review: Review with Jev instead of the classifier model.
+            jev_decider: Jev client for `jev_review`. `None` means no key is
+                configured, so reviewed actions are allowed without a review.
 
         Raises:
             ValueError: If a trusted tool has an unexpected name.
@@ -2651,6 +2679,8 @@ class AutoModeHITLMiddleware(HumanInTheLoopMiddleware[AutoModeState, Any, Any]):
         self._configured_classifier_model = classifier_model
         self._cli_max_retries = cli_max_retries
         self._environ = environ
+        self._jev_review = jev_review
+        self._jev_decider = jev_decider
         self._classifier_model_cache: OrderedDict[str, BaseChatModel] = OrderedDict()
         self._classifier_model_lock = asyncio.Lock()
         self._classifier_model_constructions: dict[
@@ -3116,7 +3146,7 @@ class AutoModeHITLMiddleware(HumanInTheLoopMiddleware[AutoModeState, Any, Any]):
         all_calls: Sequence[ToolCall],
         dispositions: Mapping[str, str],
         tools: Mapping[str, BaseTool],
-    ) -> tuple[AutoDecisionBatch, AutoClassifierConversation]:
+    ) -> tuple[AutoDecisionBatch, AutoClassifierConversation | None]:
         """Review one batch inside a span that survives the review failing.
 
         A deadline *cancels* the inner `ainvoke` rather than raising into it, and
@@ -3137,6 +3167,12 @@ class AutoModeHITLMiddleware(HumanInTheLoopMiddleware[AutoModeState, Any, Any]):
         Returns:
             Validated classifier verdict for the batch.
         """
+        if self._jev_review:
+            batch = await self._review_with_jev(
+                request, calls, all_calls, dispositions, tools
+            )
+            return batch, None
+
         from langsmith import trace
 
         # Names only: arguments can carry file contents and secrets.
@@ -3156,6 +3192,87 @@ class AutoModeHITLMiddleware(HumanInTheLoopMiddleware[AutoModeState, Any, Any]):
             )
             span.end(outputs={"decision_count": len(batch.decisions)})
             return batch, conversation
+
+    async def _review_with_jev(
+        self,
+        request: ModelRequest,
+        calls: Sequence[ToolCall],
+        all_calls: Sequence[ToolCall],
+        dispositions: Mapping[str, str],
+        tools: Mapping[str, BaseTool],
+    ) -> AutoDecisionBatch:
+        """Judge each action with Jev instead of a classifier model.
+
+        Args:
+            request: Resolved primary-model request for the current batch.
+            calls: Tool calls this batch must review.
+            all_calls: Every tool call in the turn, for context.
+            dispositions: Dispositions already decided for this turn.
+            tools: Tool objects by name.
+
+        Returns:
+            One verdict per call. Without a Jev key every call is allowed.
+
+        Raises:
+            _JevUnavailableError: If Jev did not give a usable probability.
+        """
+        from deepagents_code.assistant.decider import Noul
+
+        category = AutoDecisionCategory.OTHER_POLICY
+        decider = self._jev_decider
+        if decider is None:
+            logger.warning("Auto review skipped: no Jev key, actions are allowed")
+            return AutoDecisionBatch(
+                decisions=[
+                    AutoDecision(
+                        tool_call_id=_tool_call_id(call),
+                        decision="allow",
+                        category=category,
+                        reason="",
+                    )
+                    for call in calls
+                ]
+            )
+        state = _classifier_context(
+            request,
+            calls,
+            all_calls,
+            dispositions,
+            tools,
+            self._trusted_environment,
+            self._trusted_ask_user_tool,
+        )
+        questions = [
+            Noul(
+                name=_tool_call_id(call),
+                instructions=_JEV_INSTRUCTIONS + _tool_call_id(call),
+                true=_JEV_TRUE,
+                false=_JEV_FALSE,
+            )
+            for call in calls
+        ]
+        async with asyncio.timeout(self._classifier_timeout_seconds):
+            verdicts = await asyncio.to_thread(decider.judge, state, questions)
+        decisions: list[AutoDecision] = []
+        for call, verdict in zip(calls, verdicts, strict=True):
+            if verdict.probability is None:
+                raise _JevUnavailableError(str(verdict.reason))
+            decisions.append(
+                AutoDecision(
+                    tool_call_id=_tool_call_id(call),
+                    decision="allow" if verdict.passed else "deny",
+                    category=category,
+                    reason=(
+                        ""
+                        if verdict.passed
+                        else (
+                            "Jev judged this action unsafe "
+                            f"(p={verdict.probability:.2f})."
+                        )
+                    ),
+                )
+            )
+        return AutoDecisionBatch(decisions=decisions)
 
     @staticmethod
     def _classifier_conversation_identity(
@@ -3731,6 +3848,14 @@ class AutoModeHITLMiddleware(HumanInTheLoopMiddleware[AutoModeState, Any, Any]):
                     # the user gets the generic "human approval threshold reached"
                     # and never learns the classifier spec is broken.
                     plan["fallback_reason"] = latched_reason
+                elif self._jev_review:
+                    # Jev failed: a human decides, instead of a silent denial.
+                    disposition = "require_human"
+                    decision_reason = (
+                        "Jev review was unavailable; human approval is required."
+                    )
+                    path = "fallback"
+                    plan["fallback_reason"] = "jev_unavailable"
                 else:
                     disposition = "classifier_unavailable"
                     decision_reason = reason
@@ -3827,7 +3952,15 @@ class AutoModeHITLMiddleware(HumanInTheLoopMiddleware[AutoModeState, Any, Any]):
                 command=Command(
                     update={
                         "_auto_decision_plan": plan,
-                        AUTO_CLASSIFIER_CONVERSATION_STATE_KEY: classifier_conversation,
+                        **(
+                            {
+                                AUTO_CLASSIFIER_CONVERSATION_STATE_KEY: (
+                                    classifier_conversation
+                                )
+                            }
+                            if classifier_conversation is not None
+                            else {}
+                        ),
                     }
                 ),
             )
